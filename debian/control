@@ -1,0 +1,18 @@
+Source: libgofonoext
+Section: libs
+Priority: optional
+Maintainer: Slava Monich <slava.monich@jolla.com>
+Build-Depends: debhelper (>= 7), libglib2.0-dev (>= 2.0), libgofono-dev, libglibutil-dev
+Standards-Version: 3.8.4
+
+Package: libgofonoext
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Client library for nemomobile ofono extensions
+
+Package: libgofonoext-dev
+Section: libdevel
+Architecture: any
+Depends: libgofonoext (= ${binary:Version}), ${misc:Depends}
+Description: Development files for libgofonoext
