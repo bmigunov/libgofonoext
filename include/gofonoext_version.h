@@ -30,13 +30,27 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef GOFONOEXT_H
-#define GOFONOEXT_H
+#ifndef GOFONOEXT_VERSION_H
+#define GOFONOEXT_VERSION_H
 
-#include "gofonoext_version.h"
-#include "gofonoext_mm.h"
+#include "gofonoext_types.h"
 
-#endif /* GOFONOEXT_H */
+#define GOFONOEXT_VERSION_MAJOR   1
+#define GOFONOEXT_VERSION_MINOR   0
+#define GOFONOEXT_VERSION_RELEASE 1
+
+#define GOFONOEXT_API_VERSION(major,minor,release) \
+    (((major) << 24) | ((minor) << 16) | (release))
+
+#define GOFONOEXT_VERSION \
+    GOFONOEXT_API_VERSION(GOFONOEXT_VERSION_MAJOR,\
+                          GOFONOEXT_VERSION_MINOR,\
+                          GOFONOEXT_VERSION_RELEASE)
+
+guint32
+ofonoext_version(void);
+
+#endif /* GOFONOEXT_VERSION_H */
 
 /*
  * Local Variables:

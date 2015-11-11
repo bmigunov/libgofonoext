@@ -1,3 +1,9 @@
+libgofonoext (1.0.1) unstable; urgency=low
+
+  * Added ofonoext_version function
+
+ -- Slava Monich <slava.monich@jolla.com>  Wed, 11 Nov 2015 22:13:52 +0200
+
 libgofonoext (1.0.0) unstable; urgency=low
 
   * Initial release

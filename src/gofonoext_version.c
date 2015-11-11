@@ -30,13 +30,13 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef GOFONOEXT_H
-#define GOFONOEXT_H
-
 #include "gofonoext_version.h"
-#include "gofonoext_mm.h"
 
-#endif /* GOFONOEXT_H */
+guint32
+ofonoext_version()
+{
+    return GOFONOEXT_VERSION;
+}
 
 /*
  * Local Variables:

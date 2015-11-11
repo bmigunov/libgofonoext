@@ -15,27 +15,12 @@ PKGS = glib-2.0 gio-2.0 gio-unix-2.0 libgofono libglibutil
 all: debug release pkgconfig
 
 #
-# Library version
-#
-
-VERSION_MAJOR = 1
-VERSION_MINOR = 0
-VERSION_RELEASE = 0
-
-NAME = gofonoext
-LIB_NAME = lib$(NAME)
-LIB_DEV_SYMLINK = $(LIB_NAME).so
-LIB_SYMLINK1 = $(LIB_DEV_SYMLINK).$(VERSION_MAJOR)
-LIB_SYMLINK2 = $(LIB_SYMLINK1).$(VERSION_MINOR)
-LIB_SONAME = $(LIB_SYMLINK1)
-LIB = $(LIB_SONAME).$(VERSION_MINOR).$(VERSION_RELEASE)
-
-#
 # Sources
 #
 
 SRC = \
-  gofonoext_mm.c
+  gofonoext_mm.c \
+  gofonoext_version.c
 GEN_SRC = \
   org.nemomobile.ofono.ModemManager.c \
   org.nemomobile.ofono.SimSettings.c
@@ -51,6 +36,31 @@ GEN_DIR = $(BUILD_DIR)
 SPEC_DIR = spec
 DEBUG_BUILD_DIR = $(BUILD_DIR)/debug
 RELEASE_BUILD_DIR = $(BUILD_DIR)/release
+
+#
+# Library version
+#
+
+$(foreach v,MAJOR MINOR RELEASE,$(eval VERSION_$v=$(shell grep -E "^ *\#define +GOFONOEXT_VERSION_"$v" +[0-9]+$$" "$(INCLUDE_DIR)/gofonoext_version.h" | sed 's/  */ /g' | cut -d ' ' -f 3)))
+
+ifeq ($(and $(VERSION_MAJOR),$(VERSION_MINOR),$(VERSION_RELEASE)),)
+$(error "Unable to determine library version")
+endif
+
+# Version for pkg-config
+PCVERSION = $(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_RELEASE)
+
+#
+# Library name
+#
+
+NAME = gofonoext
+LIB_NAME = lib$(NAME)
+LIB_DEV_SYMLINK = $(LIB_NAME).so
+LIB_SYMLINK1 = $(LIB_DEV_SYMLINK).$(VERSION_MAJOR)
+LIB_SYMLINK2 = $(LIB_SYMLINK1).$(VERSION_MINOR)
+LIB_SONAME = $(LIB_SYMLINK1)
+LIB = $(LIB_SONAME).$(VERSION_MINOR).$(VERSION_RELEASE)
 
 #
 # Tools and flags
@@ -179,7 +189,7 @@ $(RELEASE_LINK):
 	ln -sf $(LIB) $@
 
 $(PKGCONFIG): $(LIB_NAME).pc.in
-	sed -e 's/\[version\]/'$(VERSION_MAJOR).$(VERSION_MINOR)/g $< > $@
+	sed -e 's/\[version\]/'$(PCVERSION)/g $< > $@
 
 #
 # Install
