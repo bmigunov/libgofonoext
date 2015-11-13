@@ -49,6 +49,10 @@ struct ofonoext_modem_manager {
     const char* voice_imsi;
     OfonoModem* data_modem;
     OfonoModem* voice_modem;
+    const gboolean* present_sims;
+    gint modem_count;
+    gint sim_count;
+    gint active_sim_count;
 };
 
 GType ofonoext_mm_get_type(void);
@@ -72,6 +76,11 @@ ofonoext_mm_ref(
 void
 ofonoext_mm_unref(
     OfonoExtModemManager* mm);
+
+gboolean
+ofonoext_mm_modem_enabled_at(
+    OfonoExtModemManager* mm,
+    gint index);
 
 gulong
 ofonoext_mm_add_valid_changed_handler(
@@ -105,6 +114,24 @@ ofonoext_mm_add_voice_imsi_changed_handler(
 
 gulong
 ofonoext_mm_add_voice_modem_changed_handler(
+    OfonoExtModemManager* mm,
+    OfonoExtModemManagerHandler fn,
+    void* data);
+
+gulong
+ofonoext_mm_add_present_sims_changed_handler(
+    OfonoExtModemManager* mm,
+    OfonoExtModemManagerHandler fn,
+    void* data);
+
+gulong
+ofonoext_mm_add_sim_count_changed_handler(
+    OfonoExtModemManager* mm,
+    OfonoExtModemManagerHandler fn,
+    void* data);
+
+gulong
+ofonoext_mm_add_active_sim_count_changed_handler(
     OfonoExtModemManager* mm,
     OfonoExtModemManagerHandler fn,
     void* data);

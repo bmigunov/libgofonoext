@@ -36,6 +36,8 @@
 #include <gofono_modem.h>
 #include <gofono_names.h>
 
+#include <gutil_strv.h>
+
 /* Generated headers */
 #include "org.nemomobile.ofono.ModemManager.h"
 
@@ -49,6 +51,7 @@ enum proxy_handler_id {
     PROXY_SIGNAL_DATA_MODEM_CHANGED,
     PROXY_SIGNAL_VOICE_IMSI_CHANGED,
     PROXY_SIGNAL_VOICE_MODEM_CHANGED,
+    PROXY_SIGNAL_PRESENT_SIMS_CHANGED,
     PROXY_SIGNAL_COUNT
 };
 
@@ -62,6 +65,7 @@ struct ofonoext_mm_priv {
     char** enabled;
     char* data_imsi;
     char* voice_imsi;
+    gboolean* present_sims;
 };
 
 typedef GObjectClass OfonoExtModemManagerClass;
@@ -74,15 +78,21 @@ enum ofonoext_mm_signal {
     SIGNAL_DATA_MODEM_CHANGED,
     SIGNAL_VOICE_IMSI_CHANGED,
     SIGNAL_VOICE_MODEM_CHANGED,
+    SIGNAL_PRESENT_SIMS_CHANGED,
+    SIGNAL_SIM_COUNT_CHANGED,
+    SIGNAL_ACTIVE_SIM_COUNT_CHANGED,
     SIGNAL_COUNT
 };
 
-#define SIGNAL_VALID_CHANGED_NAME           "valid-changed"
-#define SIGNAL_ENABLED_MODEMS_CHANGED_NAME  "enabled-modems-changed"
-#define SIGNAL_DATA_IMSI_CHANGED_NAME       "data-imsi-changed"
-#define SIGNAL_DATA_MODEM_CHANGED_NAME      "data-modem-changed"
-#define SIGNAL_VOICE_IMSI_CHANGED_NAME      "voice-imsi-changed"
-#define SIGNAL_VOICE_MODEM_CHANGED_NAME     "voice-modem-changed"
+#define SIGNAL_VALID_CHANGED_NAME               "valid-changed"
+#define SIGNAL_ENABLED_MODEMS_CHANGED_NAME      "enabled-modems-changed"
+#define SIGNAL_DATA_IMSI_CHANGED_NAME           "data-imsi-changed"
+#define SIGNAL_DATA_MODEM_CHANGED_NAME          "data-modem-changed"
+#define SIGNAL_VOICE_IMSI_CHANGED_NAME          "voice-imsi-changed"
+#define SIGNAL_VOICE_MODEM_CHANGED_NAME         "voice-modem-changed"
+#define SIGNAL_PRESENT_SIMS_CHANGED_NAME        "present-sims-changed"
+#define SIGNAL_SIM_COUNT_CHANGED_NAME           "sim-count-changed"
+#define SIGNAL_ACTIVE_SIM_COUNT_CHANGED_NAME    "active-sim-count-changed"
 
 static guint ofonoext_mm_signals[SIGNAL_COUNT] = { 0 };
 
@@ -168,6 +178,40 @@ ofonoext_mm_reset(
 
 static
 void
+ofonoext_mm_update_sim_counts(
+    OfonoExtModemManager* self,
+    gboolean emit_signals)
+{
+    gint i;
+    OfonoExtModemManagerPriv* priv = self->priv;
+    const gint old_sim_count = self->sim_count;
+    const gint old_active_sim_count = self->active_sim_count;
+
+    self->sim_count = 0;
+    self->active_sim_count = 0;
+    for (i=0; i<self->modem_count; i++) {
+        if (priv->present_sims[i]) {
+            self->sim_count++;
+            if (ofonoext_mm_modem_enabled_at(self, i)) {
+                self->active_sim_count++;
+            }
+        }
+    }
+
+    if (emit_signals) {
+        if (old_sim_count != self->sim_count) {
+            g_signal_emit(self, ofonoext_mm_signals[
+                SIGNAL_SIM_COUNT_CHANGED], 0);
+        }
+        if (old_active_sim_count != self->active_sim_count) {
+            g_signal_emit(self, ofonoext_mm_signals[
+                SIGNAL_ACTIVE_SIM_COUNT_CHANGED], 0);
+        }
+    }
+}
+
+static
+void
 ofonoext_mm_get_all_done(
     GObject* proxy,
     GAsyncResult* result,
@@ -183,16 +227,18 @@ ofonoext_mm_get_all_done(
     char* voice_imsi = NULL;
     char* data_modem = NULL;
     char* voice_modem = NULL;
+    GVariant* present_sims = NULL;
 
     GASSERT(!self->valid);
     GASSERT(priv->cancel);
     g_object_unref(priv->cancel);
     priv->cancel = NULL;
-    if (org_nemomobile_ofono_modem_manager_call_get_all_finish(
+    if (org_nemomobile_ofono_modem_manager_call_get_all2_finish(
         ORG_NEMOMOBILE_OFONO_MODEM_MANAGER(proxy), &version, &available,
         &enabled, &data_imsi, &voice_imsi, &data_modem, &voice_modem,
-        result, &error)) {
+        &present_sims, result, &error)) {
         OfonoModem* modem;
+        gint i;
 
         g_strfreev(priv->available);
         g_strfreev(priv->enabled);
@@ -202,6 +248,7 @@ ofonoext_mm_get_all_done(
         self->enabled = priv->enabled = enabled;
         self->data_imsi = priv->data_imsi = data_imsi;
         self->voice_imsi = priv->voice_imsi = voice_imsi;
+        self->modem_count = gutil_strv_length(available);
 
         modem = self->data_modem;
         self->data_modem = (data_modem && data_modem[0]) ?
@@ -213,6 +260,17 @@ ofonoext_mm_get_all_done(
             ofono_modem_new(voice_modem) : NULL;
         ofono_modem_unref(modem);
 
+        GASSERT(self->modem_count == g_variant_n_children(present_sims));
+        g_free(priv->present_sims);
+        priv->present_sims = g_new0(gboolean, self->modem_count);
+        self->present_sims = priv->present_sims;
+        for (i=0; i<self->modem_count; i++) {
+            GVariant* v = g_variant_get_child_value(present_sims, i);
+            priv->present_sims[i] = g_variant_get_boolean(v);
+            g_variant_unref(v);
+        }
+
+        ofonoext_mm_update_sim_counts(self, FALSE);
         ofonoext_mm_set_valid(self, TRUE);
     } else {
         g_strfreev(available);
@@ -230,6 +288,7 @@ ofonoext_mm_get_all_done(
     g_free(data_modem);
     g_free(voice_modem);
     ofonoext_mm_unref(self);
+    if (present_sims) g_variant_unref(present_sims);
     if (error) g_error_free(error);
 }
 
@@ -244,6 +303,7 @@ ofonoext_mm_enabled_modems_changed(
     OfonoExtModemManagerPriv* priv = self->priv;
     g_strfreev(priv->enabled);
     self->enabled = priv->enabled = g_strdupv(modems);
+    ofonoext_mm_update_sim_counts(self, TRUE);
     g_signal_emit(self, ofonoext_mm_signals[SIGNAL_ENABLED_MODEMS_CHANGED], 0);
 }
 
@@ -307,6 +367,25 @@ ofonoext_mm_default_voice_modem_changed(
 
 static
 void
+ofonoext_mm_present_sims_changed(
+    OrgNemomobileOfonoModemManager* proxy,
+    int index,
+    gboolean present,
+    gpointer data)
+{
+    OfonoExtModemManager* self = data;
+    OfonoExtModemManagerPriv* priv = self->priv;
+    GASSERT(index >= 0 && index < self->modem_count);
+    if (index >= 0 && index < self->modem_count) {
+        priv->present_sims[index] = (present != FALSE);
+        g_signal_emit(self, ofonoext_mm_signals[
+            SIGNAL_PRESENT_SIMS_CHANGED], 0);
+        ofonoext_mm_update_sim_counts(self, TRUE);
+    }
+}
+
+static
+void
 ofonoext_mm_proxy_created(
     GObject* proxy,
     GAsyncResult* result,
@@ -343,9 +422,12 @@ ofonoext_mm_proxy_created(
         priv->proxy_signal_id[PROXY_SIGNAL_VOICE_MODEM_CHANGED] =
             g_signal_connect(proxy, "default-voice-modem-changed",
             G_CALLBACK(ofonoext_mm_default_voice_modem_changed), self);
+        priv->proxy_signal_id[PROXY_SIGNAL_PRESENT_SIMS_CHANGED] =
+            g_signal_connect(proxy, "present-sims-changed",
+            G_CALLBACK(ofonoext_mm_present_sims_changed), self);
 
         /* Request current settings */
-        org_nemomobile_ofono_modem_manager_call_get_all(priv->proxy,
+        org_nemomobile_ofono_modem_manager_call_get_all2(priv->proxy,
             priv->cancel, ofonoext_mm_get_all_done, self);
     } else {
 #if GUTIL_LOG_ERR
@@ -456,6 +538,22 @@ ofonoext_mm_unref(
         g_object_unref(OFONOEXT_MODEM_MANAGER(self));
     }
 }
+
+gboolean
+ofonoext_mm_modem_enabled_at(
+    OfonoExtModemManager* self,
+    gint index)
+{
+    if (G_LIKELY(self)) {
+        OfonoExtModemManagerPriv* priv = self->priv;
+        const char* path = gutil_strv_at(priv->available, index);
+        if (path) {
+            return gutil_strv_contains(priv->enabled, path);
+        }
+    }
+    return FALSE;
+}
+
 gulong
 ofonoext_mm_add_valid_changed_handler(
     OfonoExtModemManager* self,
@@ -514,6 +612,36 @@ ofonoext_mm_add_voice_modem_changed_handler(
 {
     return (G_LIKELY(self) && G_LIKELY(fn)) ? g_signal_connect(self,
         SIGNAL_VOICE_MODEM_CHANGED_NAME, G_CALLBACK(fn), data) : 0;
+}
+
+gulong
+ofonoext_mm_add_present_sims_changed_handler(
+    OfonoExtModemManager* self,
+    OfonoExtModemManagerHandler fn,
+    void* data)
+{
+    return (G_LIKELY(self) && G_LIKELY(fn)) ? g_signal_connect(self,
+        SIGNAL_PRESENT_SIMS_CHANGED_NAME, G_CALLBACK(fn), data) : 0;
+}
+
+gulong
+ofonoext_mm_add_sim_count_changed_handler(
+    OfonoExtModemManager* self,
+    OfonoExtModemManagerHandler fn,
+    void* data)
+{
+    return (G_LIKELY(self) && G_LIKELY(fn)) ? g_signal_connect(self,
+        SIGNAL_SIM_COUNT_CHANGED_NAME, G_CALLBACK(fn), data) : 0;
+}
+
+gulong
+ofonoext_mm_add_active_sim_count_changed_handler(
+    OfonoExtModemManager* self,
+    OfonoExtModemManagerHandler fn,
+    void* data)
+{
+    return (G_LIKELY(self) && G_LIKELY(fn)) ? g_signal_connect(self,
+        SIGNAL_ACTIVE_SIM_COUNT_CHANGED_NAME, G_CALLBACK(fn), data) : 0;
 }
 
 void
@@ -600,6 +728,7 @@ ofonoext_mm_finalize(
     g_strfreev(priv->enabled);
     g_free(priv->data_imsi);
     g_free(priv->voice_imsi);
+    g_free(priv->present_sims);
     G_OBJECT_CLASS(ofonoext_mm_parent_class)->finalize(object);
 }
 
@@ -621,6 +750,9 @@ ofonoext_mm_class_init(
     OFONOEXT_SIGNAL_NEW(DATA_MODEM);
     OFONOEXT_SIGNAL_NEW(VOICE_IMSI);
     OFONOEXT_SIGNAL_NEW(VOICE_MODEM);
+    OFONOEXT_SIGNAL_NEW(PRESENT_SIMS);
+    OFONOEXT_SIGNAL_NEW(SIM_COUNT);
+    OFONOEXT_SIGNAL_NEW(ACTIVE_SIM_COUNT);
 }
 
 /*
