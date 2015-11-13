@@ -37,7 +37,7 @@
 
 #define GOFONOEXT_VERSION_MAJOR   1
 #define GOFONOEXT_VERSION_MINOR   0
-#define GOFONOEXT_VERSION_RELEASE 1
+#define GOFONOEXT_VERSION_RELEASE 2
 
 #define GOFONOEXT_API_VERSION(major,minor,release) \
     (((major) << 24) | ((minor) << 16) | (release))
