@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Jolla Ltd.
+ * Copyright (C) 2015-2016 Jolla Ltd.
  * Contact: Slava Monich <slava.monich@jolla.com>
  *
  * You may use this file under the terms of BSD license as follows:
@@ -43,16 +43,17 @@ struct ofonoext_modem_manager {
     GObject object;
     OfonoExtModemManagerPriv* priv;
     gboolean valid;
-    char* const* available;
-    char* const* enabled;
+    const GStrV* available;
+    const GStrV* enabled;
     const char* data_imsi;
     const char* voice_imsi;
     OfonoModem* data_modem;
     OfonoModem* voice_modem;
     const gboolean* present_sims;
-    gint modem_count;
-    gint sim_count;
-    gint active_sim_count;
+    guint modem_count;
+    guint sim_count;
+    guint active_sim_count;
+    const GStrV* imei;
 };
 
 GType ofonoext_mm_get_type(void);

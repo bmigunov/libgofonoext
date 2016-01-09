@@ -21,6 +21,17 @@
             <arg name="defaultVoiceModem" type="s" direction="out"/>
             <arg name="presentSims" type="ab" direction="out"/>
         </method>
+        <method name="GetAll3">
+            <arg name="version" type="i" direction="out"/>
+            <arg name="availableModems" type="ao" direction="out"/>
+            <arg name="enabledModems" type="ao" direction="out"/>
+            <arg name="defaultDataSim" type="s" direction="out"/>
+            <arg name="defaultVoiceSim" type="s" direction="out"/>
+            <arg name="defaultDataModem" type="s" direction="out"/>
+            <arg name="defaultVoiceModem" type="s" direction="out"/>
+            <arg name="presentSims" type="ab" direction="out"/>
+            <arg name="imei" type="as" direction="out"/>
+        </method>
         <method name="GetInterfaceVersion">
             <arg name="version" type="i" direction="out"/>
         </method>
@@ -32,6 +43,9 @@
         </method>
         <method name="GetPresentSims">
             <arg name="modems" type="as" direction="out"/>
+        </method>
+        <method name="GetIMEI">
+            <arg name="imsi" type="as" direction="out"/>
         </method>
         <method name="GetDefaultDataSim">
             <arg name="imsi" type="s" direction="out"/>

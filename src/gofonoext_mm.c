@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Jolla Ltd.
+ * Copyright (C) 2015-2016 Jolla Ltd.
  * Contact: Slava Monich <slava.monich@jolla.com>
  *
  * You may use this file under the terms of BSD license as follows:
@@ -61,11 +61,12 @@ struct ofonoext_mm_priv {
     gulong proxy_signal_id[PROXY_SIGNAL_COUNT];
     guint ofono_watch_id;
     GCancellable* cancel;
-    char** available;
-    char** enabled;
+    GStrV* available;
+    GStrV* enabled;
     char* data_imsi;
     char* voice_imsi;
     gboolean* present_sims;
+    GStrV* imei;
 };
 
 typedef GObjectClass OfonoExtModemManagerClass;
@@ -174,6 +175,10 @@ ofonoext_mm_reset(
         ofono_modem_unref(self->voice_modem);
         self->voice_modem = NULL;
     }
+    if (self->imei) {
+        g_strfreev(priv->imei);
+        self->imei = priv->imei = NULL;
+    }
 }
 
 static
@@ -182,10 +187,10 @@ ofonoext_mm_update_sim_counts(
     OfonoExtModemManager* self,
     gboolean emit_signals)
 {
-    gint i;
+    guint i;
     OfonoExtModemManagerPriv* priv = self->priv;
-    const gint old_sim_count = self->sim_count;
-    const gint old_active_sim_count = self->active_sim_count;
+    const guint old_sim_count = self->sim_count;
+    const guint old_active_sim_count = self->active_sim_count;
 
     self->sim_count = 0;
     self->active_sim_count = 0;
@@ -212,6 +217,172 @@ ofonoext_mm_update_sim_counts(
 
 static
 void
+ofonoext_mm_init_done(
+    OfonoExtModemManager* self,
+    GStrV* available,
+    GStrV* enabled,
+    gchar* data_imsi,
+    gchar* voice_imsi,
+    const char* data_modem,
+    const char* voice_modem,
+    GVariant* present_sims,
+    GStrV* imei)
+{
+    OfonoExtModemManagerPriv* priv = self->priv;
+    OfonoModem* modem;
+
+    g_strfreev(priv->available);
+    g_strfreev(priv->enabled);
+    g_strfreev(priv->imei);
+    g_free(priv->data_imsi);
+    g_free(priv->voice_imsi);
+
+    self->available = priv->available = available;
+    self->enabled = priv->enabled = enabled;
+    self->imei = priv->imei = imei;
+    self->data_imsi = priv->data_imsi = data_imsi;
+    self->voice_imsi = priv->voice_imsi = voice_imsi;
+    self->modem_count = gutil_strv_length(available);
+
+    modem = self->data_modem;
+    self->data_modem = (data_modem && data_modem[0]) ?
+        ofono_modem_new(data_modem) : NULL;
+    ofono_modem_unref(modem);
+
+    modem = self->voice_modem;
+    self->voice_modem = (voice_modem && voice_modem[0]) ?
+        ofono_modem_new(voice_modem) : NULL;
+    ofono_modem_unref(modem);
+
+    if (present_sims) {
+        guint i;
+        GASSERT(self->modem_count == g_variant_n_children(present_sims));
+        g_free(priv->present_sims);
+        priv->present_sims = g_new0(gboolean, self->modem_count);
+        self->present_sims = priv->present_sims;
+        for (i=0; i<self->modem_count; i++) {
+            GVariant* v = g_variant_get_child_value(present_sims, i);
+            priv->present_sims[i] = g_variant_get_boolean(v);
+            g_variant_unref(v);
+        }
+    }
+
+    ofonoext_mm_update_sim_counts(self, FALSE);
+    ofonoext_mm_set_valid(self, TRUE);
+}
+
+static
+void
+ofonoext_mm_get_all_finish(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer data,
+    gboolean (*finish_call)(
+        OrgNemomobileOfonoModemManager* proxy,
+        gint* version,
+        gchar*** available,
+        gchar*** enabled,
+        gchar** data_imsi,
+        gchar** voice_imsi,
+        gchar** data_modem,
+        gchar** voice_modem,
+        GVariant** present_sims,
+        gchar*** imei,
+        GAsyncResult* res,
+        GError **error))
+{
+    GError* error = NULL;
+    OfonoExtModemManager* self = data;
+    OfonoExtModemManagerPriv* priv = self->priv;
+    int version = 0;
+    char** available = NULL;
+    char** enabled = NULL;
+    char* data_imsi = NULL;
+    char* voice_imsi = NULL;
+    char* data_modem = NULL;
+    char* voice_modem = NULL;
+    GVariant* present_sims = NULL;
+    char** imei = NULL;
+
+    GASSERT(!self->valid);
+    GASSERT(priv->cancel);
+    g_object_unref(priv->cancel);
+    priv->cancel = NULL;
+    if (finish_call(ORG_NEMOMOBILE_OFONO_MODEM_MANAGER(proxy), &version,
+        &available, &enabled, &data_imsi, &voice_imsi, &data_modem,
+        &voice_modem, &present_sims, &imei, result, &error)) {
+        /* This call is only made for interface versions 2 and later */
+        GASSERT(version > 1);
+        /* ofonoext_mm_init_done takes ownership of all the pointers except
+         * data_modem, voice_modem and present_sims */
+        ofonoext_mm_init_done(self, available, enabled, data_imsi, voice_imsi,
+            data_modem, voice_modem, present_sims, imei);
+    } else {
+        g_strfreev(available);
+        g_strfreev(enabled);
+        g_free(data_imsi);
+        g_free(voice_imsi);
+        g_strfreev(imei);
+#if GUTIL_LOG_ERR
+        if (error->code == G_IO_ERROR_CANCELLED) {
+            GDEBUG("%s", GERRMSG(error));
+        } else {
+            GERR("%s", GERRMSG(error));
+        }
+#endif
+    }
+    g_free(data_modem);
+    g_free(voice_modem);
+    ofonoext_mm_unref(self);
+    if (present_sims) g_variant_unref(present_sims);
+    if (error) g_error_free(error);
+}
+
+static
+void
+ofonoext_mm_get_all3_done(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer data)
+{
+    ofonoext_mm_get_all_finish(proxy, result, data,
+        org_nemomobile_ofono_modem_manager_call_get_all3_finish);
+}
+
+static
+gboolean
+ofonoext_mm_get_all2_finish(
+    OrgNemomobileOfonoModemManager* proxy,
+    gint* version,
+    gchar*** available,
+    gchar*** enabled,
+    gchar** data_imsi,
+    gchar** voice_imsi,
+    gchar** data_modem,
+    gchar** voice_modem,
+    GVariant** present_sims,
+    gchar*** imei,
+    GAsyncResult* res,
+    GError **error)
+{
+    *imei = NULL;
+    return org_nemomobile_ofono_modem_manager_call_get_all2_finish(proxy,
+        version, available, enabled, data_imsi, voice_imsi, data_modem,
+        voice_modem, present_sims, res, error);
+}
+
+static
+void
+ofonoext_mm_get_all2_done(
+    GObject* proxy,
+    GAsyncResult* res,
+    gpointer data)
+{
+    ofonoext_mm_get_all_finish(proxy, res, data, ofonoext_mm_get_all2_finish);
+}
+
+static
+void
 ofonoext_mm_get_all_done(
     GObject* proxy,
     GAsyncResult* result,
@@ -227,51 +398,43 @@ ofonoext_mm_get_all_done(
     char* voice_imsi = NULL;
     char* data_modem = NULL;
     char* voice_modem = NULL;
-    GVariant* present_sims = NULL;
 
     GASSERT(!self->valid);
     GASSERT(priv->cancel);
     g_object_unref(priv->cancel);
     priv->cancel = NULL;
-    if (org_nemomobile_ofono_modem_manager_call_get_all2_finish(
+    if (org_nemomobile_ofono_modem_manager_call_get_all_finish(
         ORG_NEMOMOBILE_OFONO_MODEM_MANAGER(proxy), &version, &available,
         &enabled, &data_imsi, &voice_imsi, &data_modem, &voice_modem,
-        &present_sims, result, &error)) {
-        OfonoModem* modem;
-        gint i;
+        result, &error)) {
+        if (version == 1) {
+            /* ofonoext_mm_init_done takes the ownership of the arguments
+             * except for data_modem and voice_modem */
+            ofonoext_mm_init_done(self, available, enabled, data_imsi,
+                voice_imsi, data_modem, voice_modem, NULL, NULL);
+        } else {
+            g_strfreev(available);
+            g_strfreev(enabled);
+            g_free(data_imsi);
+            g_free(voice_imsi);
 
-        g_strfreev(priv->available);
-        g_strfreev(priv->enabled);
-        g_free(priv->data_imsi);
-        g_free(priv->voice_imsi);
-        self->available = priv->available = available;
-        self->enabled = priv->enabled = enabled;
-        self->data_imsi = priv->data_imsi = data_imsi;
-        self->voice_imsi = priv->voice_imsi = voice_imsi;
-        self->modem_count = gutil_strv_length(available);
-
-        modem = self->data_modem;
-        self->data_modem = (data_modem && data_modem[0]) ?
-            ofono_modem_new(data_modem) : NULL;
-        ofono_modem_unref(modem);
-
-        modem = self->voice_modem;
-        self->voice_modem = (voice_modem && voice_modem[0]) ?
-            ofono_modem_new(voice_modem) : NULL;
-        ofono_modem_unref(modem);
-
-        GASSERT(self->modem_count == g_variant_n_children(present_sims));
-        g_free(priv->present_sims);
-        priv->present_sims = g_new0(gboolean, self->modem_count);
-        self->present_sims = priv->present_sims;
-        for (i=0; i<self->modem_count; i++) {
-            GVariant* v = g_variant_get_child_value(present_sims, i);
-            priv->present_sims[i] = g_variant_get_boolean(v);
-            g_variant_unref(v);
+            GDEBUG("Interface version %d", version);
+            priv->cancel = g_cancellable_new();
+            ofonoext_mm_ref(self);
+            switch (version) {
+            case 2:
+                /* Request version 2 settings */
+                org_nemomobile_ofono_modem_manager_call_get_all2(priv->proxy,
+                    priv->cancel, ofonoext_mm_get_all2_done, self);
+                break;
+            case 3:
+            default:
+                /* Request version 3 settings */
+                org_nemomobile_ofono_modem_manager_call_get_all3(priv->proxy,
+                    priv->cancel, ofonoext_mm_get_all3_done, self);
+                break;
+            }
         }
-
-        ofonoext_mm_update_sim_counts(self, FALSE);
-        ofonoext_mm_set_valid(self, TRUE);
     } else {
         g_strfreev(available);
         g_strfreev(enabled);
@@ -288,7 +451,6 @@ ofonoext_mm_get_all_done(
     g_free(data_modem);
     g_free(voice_modem);
     ofonoext_mm_unref(self);
-    if (present_sims) g_variant_unref(present_sims);
     if (error) g_error_free(error);
 }
 
@@ -427,7 +589,7 @@ ofonoext_mm_proxy_created(
             G_CALLBACK(ofonoext_mm_present_sims_changed), self);
 
         /* Request current settings */
-        org_nemomobile_ofono_modem_manager_call_get_all2(priv->proxy,
+        org_nemomobile_ofono_modem_manager_call_get_all(priv->proxy,
             priv->cancel, ofonoext_mm_get_all_done, self);
     } else {
 #if GUTIL_LOG_ERR
@@ -729,6 +891,7 @@ ofonoext_mm_finalize(
     g_free(priv->data_imsi);
     g_free(priv->voice_imsi);
     g_free(priv->present_sims);
+    g_strfreev(priv->imei);
     G_OBJECT_CLASS(ofonoext_mm_parent_class)->finalize(object);
 }
 
