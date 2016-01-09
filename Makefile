@@ -1,6 +1,8 @@
 # -*- Mode: makefile-gmake -*-
 
-.PHONY: clean all debug release pkgconfig print_debug_lib print_release_lib
+.PHONY: clean all debug release pkgconfig
+.PHONY: print_debug_lib print_release_lib
+.PHONY: print_debug_link print_release_link
 
 #
 # Required packages
@@ -142,6 +144,12 @@ print_debug_lib:
 print_release_lib:
 	@echo $(RELEASE_LIB)
 
+print_debug_link:
+	@echo $(DEBUG_LINK)
+
+print_release_link:
+	@echo $(RELEASE_LINK)
+
 clean:
 	rm -f *~ $(SRC_DIR)/*~ $(INCLUDE_DIR)/*~ rpm/*~
 	rm -fr $(BUILD_DIR) RPMS installroot
@@ -182,10 +190,16 @@ ifeq ($(KEEP_SYMBOLS),0)
 	strip $@
 endif
 
-$(DEBUG_LINK):
+$(DEBUG_BUILD_DIR)/$(LIB_SYMLINK1): $(DEBUG_BUILD_DIR)/$(LIB_SYMLINK2)
+	ln -sf $(LIB_SYMLINK2) $@
+
+$(RELEASE_BUILD_DIR)/$(LIB_SYMLINK1): $(RELEASE_BUILD_DIR)/$(LIB_SYMLINK2)
+	ln -sf $(LIB_SYMLINK2) $@
+
+$(DEBUG_BUILD_DIR)/$(LIB_SYMLINK2): $(DEBUG_LIB)
 	ln -sf $(LIB) $@
 
-$(RELEASE_LINK):
+$(RELEASE_BUILD_DIR)/$(LIB_SYMLINK2): $(RELEASE_LIB)
 	ln -sf $(LIB) $@
 
 $(PKGCONFIG): $(LIB_NAME).pc.in
