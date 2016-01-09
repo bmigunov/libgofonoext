@@ -1,3 +1,10 @@
+libgofonoext (1.0.3) unstable; urgency=low
+
+  * Added support for getting IMEIs of the modems
+  * Added test
+
+ -- Slava Monich <slava.monich@jolla.com>  Sat, 09 Jan 2016 19:05:12 +0200
+
 libgofonoext (1.0.2) unstable; urgency=low
 
   * Added SIM presence support

@@ -1,13 +1,13 @@
 Name: libgofonoext
-Version: 1.0.2
+Version: 1.0.3
 Release: 0
 Summary: Client library for nemomobile ofono extensions
 Group: Development/Libraries
 License: BSD
-URL: https://github.com/nemomobile/libgofonoext
+URL: https://git.merproject.org/mer-core/libgofonoext
 Source: %{name}-%{version}.tar.bz2
 BuildRequires: glib2-devel >= 2.0
-BuildRequires: libglibutil-devel
+BuildRequires: libglibutil-devel >= 1.0.3
 BuildRequires: libgofono-devel
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
