@@ -33,6 +33,8 @@
 #include "gofonoext_mm.h"
 #include "gofonoext_version.h"
 
+#include "gofono_modem.h"
+
 #include <gutil_log.h>
 
 #define RET_OK          (0)
@@ -40,46 +42,68 @@
 #define RET_ERR         (2)
 #define RET_TIMEOUT     (3)
 
+enum event_id {
+    EVENT_VALID,
+    EVENT_ENABLED_MODEMS,
+    EVENT_PRESENT_SIMS,
+    EVENT_VOICE_IMSI,
+    EVENT_VOICE_MODEM,
+    EVENT_DATA_IMSI,
+    EVENT_DATA_MODEM,
+    EVENT_SIM_COUNT,
+    EVENT_ACTIVE_SIM_COUNT,
+    EVENT_COUNT
+};
+
 typedef struct app {
     gint timeout;
     GMainLoop* loop;
     OfonoExtModemManager* mm;
-    gulong mm_valid_id;
+    gulong event_id[EVENT_COUNT];
+    gboolean monitor;
     int ret;
 } App;
 
 static
-void
-mm_dump_bool(
-    const char* title,
+GString*
+mm_format_bools(
+    GString* buf,
     const gboolean* values,
     guint count)
 {
     guint i;
-    GString* buf = g_string_new("[");
+    if (buf) {
+        g_string_truncate(buf, 0);
+    } else {
+        buf = g_string_new(NULL);
+    }
+    g_string_append(buf, "[");
     for (i=0; i<count; i++) {
         if (i > 0) g_string_append(buf, ", ");
         g_string_append(buf, values[i] ? "true" : "false");
     }
     g_string_append(buf, "]");
-    printf("%s: %s\n", title, buf->str);
-    g_string_free(buf, TRUE);
+    return buf;
 }
 
-void
-mm_dump_strv(
-    const char* title,
+static
+GString*
+mm_format_strv(
+    GString* buf,
     const GStrV* sv)
 {
     const GStrV* ptr;
-    GString* buf = g_string_new("[");
+    if (buf) {
+        g_string_truncate(buf, 0);
+    } else {
+        buf = g_string_new(NULL);
+    }
     for (ptr = sv; *ptr; ptr++) {
         if (ptr > sv) g_string_append(buf, ", ");
         g_string_append(buf, *ptr);
     }
     g_string_append(buf, "]");
-    printf("%s: %s\n", title, buf->str);
-    g_string_free(buf, TRUE);
+    return buf;
 }
 
 static
@@ -87,35 +111,121 @@ void
 mm_valid(
     App* app)
 {
+    GString* buf = NULL;
     GDEBUG("ofono is running");
-    mm_dump_strv("Available modems", app->mm->available);
-    mm_dump_strv("Enabled modems", app->mm->enabled);
+    buf = mm_format_strv(buf, app->mm->available);
+    printf("Available modems: %s\n", buf->str);
+    buf = mm_format_strv(buf, app->mm->enabled);
+    printf("Enabled modems: %s\n", buf->str);
+    buf = mm_format_bools(buf, app->mm->present_sims, app->mm->sim_count);
+    printf("Present SIMs: %s\n", buf->str);
     if (ofonoext_version() >= GOFONOEXT_API_VERSION(1,0,3)) {
-        mm_dump_strv("IMEI", app->mm->imei);
+        buf = mm_format_strv(buf, app->mm->imei);
+        printf("IMEI: %s\n", buf->str);
     }
-    mm_dump_bool("Present SIMs", app->mm->present_sims, app->mm->sim_count);
     printf("Data SIM: %s\n", app->mm->data_imsi);
     printf("Voice SIM: %s\n", app->mm->voice_imsi);
+    printf("Data modem: %s\n", ofono_modem_path(app->mm->data_modem));
+    printf("Voice modem: %s\n", ofono_modem_path(app->mm->voice_modem));
     printf("Modem count: %u\n", app->mm->modem_count);
     printf("SIM count: %u\n", app->mm->sim_count);
     printf("Active SIM count: %u\n", app->mm->active_sim_count);
-    if (app->loop) {
+    g_string_free(buf, TRUE);
+    if (!app->monitor) {
         g_main_loop_quit(app->loop);
     }
 }
 
 static
 void
-mm_valid_handler(
+mm_valid_changed(
     OfonoExtModemManager* mm,
     void* arg)
 {
     if (mm->valid) {
         App* app = arg;
-        ofonoext_mm_remove_handler(mm, app->mm_valid_id);
-        app->mm_valid_id = 0;
+        ofonoext_mm_remove_handler(mm, app->event_id[EVENT_VALID]);
+        app->event_id[EVENT_VALID] = 0;
         mm_valid(app);
     }
+}
+
+static
+void
+mm_enabled_modems_changed(
+    OfonoExtModemManager* mm,
+    void* arg)
+{
+    GString* buf = NULL;
+    buf = mm_format_strv(buf, mm->enabled);
+    GDEBUG("Enabled modems: %s", buf->str);
+    g_string_free(buf, TRUE);
+}
+
+static
+void
+mm_present_sims_changed(
+    OfonoExtModemManager* mm,
+    void* arg)
+{
+    GString* buf = NULL;
+    buf = mm_format_bools(buf, mm->present_sims, mm->sim_count);
+    GDEBUG("Present SIMs: %s", buf->str);
+    g_string_free(buf, TRUE);
+}
+
+static
+void
+mm_data_imsi_changed(
+    OfonoExtModemManager* mm,
+    void* arg)
+{
+    GDEBUG("Data SIM: %s", mm->data_imsi);
+}
+
+static
+void
+mm_data_modem_changed(
+    OfonoExtModemManager* mm,
+    void* arg)
+{
+    GDEBUG("Data modem: %s", ofono_modem_path(mm->data_modem));
+}
+
+static
+void
+mm_voice_imsi_changed(
+    OfonoExtModemManager* mm,
+    void* arg)
+{
+    GDEBUG("Voice SIM: %s", mm->voice_imsi);
+}
+
+static
+void
+mm_voice_modem_changed(
+    OfonoExtModemManager* mm,
+    void* arg)
+{
+    GDEBUG("Voice modem: %s", ofono_modem_path(mm->voice_modem));
+}
+
+static
+void
+mm_sim_count_changed(
+    OfonoExtModemManager* mm,
+    void* arg)
+{
+    GDEBUG("SIM count: %u", mm->sim_count);
+}
+
+static
+void
+mm_active_sim_count_changed(
+    OfonoExtModemManager* mm,
+    void* arg)
+{
+    GDEBUG("Active SIM count: %u", mm->active_sim_count);
 }
 
 static
@@ -124,25 +234,53 @@ app_run(
     App* app)
 {
     app->mm = ofonoext_mm_new();
+    app->ret = RET_ERR;
+    app->loop = g_main_loop_new(NULL, FALSE);
+    if (app->timeout > 0) GDEBUG("Timeout %d sec", app->timeout);
     if (app->mm->valid) {
         mm_valid(app);
+        if (app->monitor) {
+            g_main_loop_run(app->loop);
+        }
     } else {
-        app->ret = RET_ERR;
-        app->loop = g_main_loop_new(NULL, FALSE);
-        if (app->timeout > 0) GDEBUG("Timeout %d sec", app->timeout);
-        app->mm_valid_id = ofonoext_mm_add_valid_changed_handler(app->mm,
-            mm_valid_handler, app);
+        app->event_id[EVENT_VALID] =
+            ofonoext_mm_add_valid_changed_handler(app->mm,
+                mm_valid_changed, app);
+        app->event_id[EVENT_ENABLED_MODEMS] =
+            ofonoext_mm_add_enabled_modems_changed_handler(app->mm,
+                mm_enabled_modems_changed, app);
+        app->event_id[EVENT_PRESENT_SIMS] =
+            ofonoext_mm_add_present_sims_changed_handler(app->mm,
+                mm_present_sims_changed, app);
+        app->event_id[EVENT_VOICE_IMSI] =
+            ofonoext_mm_add_voice_imsi_changed_handler(app->mm,
+                mm_voice_imsi_changed, app);
+        app->event_id[EVENT_VOICE_MODEM] =
+            ofonoext_mm_add_voice_modem_changed_handler(app->mm,
+                mm_voice_modem_changed, app);
+        app->event_id[EVENT_DATA_IMSI] =
+            ofonoext_mm_add_data_imsi_changed_handler(app->mm,
+                mm_data_imsi_changed, app);
+        app->event_id[EVENT_DATA_MODEM] =
+            ofonoext_mm_add_data_modem_changed_handler(app->mm,
+                mm_data_modem_changed, app);
+        app->event_id[EVENT_SIM_COUNT] =
+            ofonoext_mm_add_sim_count_changed_handler(app->mm,
+                mm_sim_count_changed, app);
+        app->event_id[EVENT_ACTIVE_SIM_COUNT] =
+            ofonoext_mm_add_active_sim_count_changed_handler(app->mm,
+                mm_active_sim_count_changed, app);
         g_main_loop_run(app->loop);
-        g_main_loop_unref(app->loop);
-        ofonoext_mm_remove_handler(app->mm, app->mm_valid_id);
+        ofonoext_mm_remove_handlers(app->mm, app->event_id, EVENT_COUNT);
     }
+    g_main_loop_unref(app->loop);
     ofonoext_mm_unref(app->mm);
     return app->ret;
 }
 
 static
 gboolean
-app_log_verbose(
+app_opt_verbose(
     const gchar* name,
     const gchar* value,
     gpointer data,
@@ -162,9 +300,11 @@ app_init(
     gboolean ok = FALSE;
     GOptionEntry entries[] = {
         { "verbose", 'v', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK,
-          app_log_verbose, "Enable verbose output", NULL },
+          app_opt_verbose, "Enable verbose output", NULL },
         { "timeout", 't', 0, G_OPTION_ARG_INT,
           &app->timeout, "Timeout in seconds", "SECONDS" },
+        { "monitor", 'm', 0, G_OPTION_ARG_NONE,
+          &app->monitor, "Monitor events", NULL },
         { NULL }
     };
     GError* error = NULL;
