@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2016 Jolla Ltd.
+ * Copyright (C) 2016 Jolla Ltd.
  * Contact: Slava Monich <slava.monich@jolla.com>
  *
  * You may use this file under the terms of BSD license as follows:
@@ -30,25 +30,20 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef GOFONOEXT_TYPES_H
-#define GOFONOEXT_TYPES_H
+#ifndef GOFONOEXT_CALL_H
+#define GOFONOEXT_CALL_H
 
-#include <gutil_types.h>
-#include <gofono_types.h>
-
-#define OFONOEXT_LOG_MODULE gofonoext_log
+#include "gofonoext_types.h"
 
 G_BEGIN_DECLS
 
-typedef struct ofonoext_modem_manager OfonoExtModemManager;
-typedef struct ofonoext_sim_settings  OfonoExtSimSettings;
-typedef struct ofonoext_call          OfonoExtCall;
-
-extern GLogModule OFONOEXT_LOG_MODULE;
+void
+ofonoext_call_cancel(
+    OfonoExtCall* call);
 
 G_END_DECLS
 
-#endif /* GOFONOEXT_TYPES_H */
+#endif /* GOFONOEXT_CALL_H */
 
 /*
  * Local Variables:

@@ -21,6 +21,7 @@ all: debug release pkgconfig
 #
 
 SRC = \
+  gofonoext_call.c \
   gofonoext_mm.c \
   gofonoext_version.c
 GEN_SRC = \

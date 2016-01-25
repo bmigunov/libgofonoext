@@ -31,6 +31,7 @@
  */
 
 #include "gofonoext_mm.h"
+#include "gofonoext_call_p.h"
 #include "gofonoext_log.h"
 
 #include <gofono_modem.h>
@@ -52,6 +53,8 @@ enum proxy_handler_id {
     PROXY_SIGNAL_VOICE_IMSI_CHANGED,
     PROXY_SIGNAL_VOICE_MODEM_CHANGED,
     PROXY_SIGNAL_PRESENT_SIMS_CHANGED,
+    PROXY_SIGNAL_MMS_IMSI_CHANGED,
+    PROXY_SIGNAL_MMS_MODEM_CHANGED,
     PROXY_SIGNAL_COUNT
 };
 
@@ -65,6 +68,7 @@ struct ofonoext_mm_priv {
     GStrV* enabled;
     char* data_imsi;
     char* voice_imsi;
+    char* mms_imsi;
     gboolean* present_sims;
     GStrV* imei;
 };
@@ -79,6 +83,8 @@ enum ofonoext_mm_signal {
     SIGNAL_DATA_MODEM_CHANGED,
     SIGNAL_VOICE_IMSI_CHANGED,
     SIGNAL_VOICE_MODEM_CHANGED,
+    SIGNAL_MMS_IMSI_CHANGED,
+    SIGNAL_MMS_MODEM_CHANGED,
     SIGNAL_PRESENT_SIMS_CHANGED,
     SIGNAL_SIM_COUNT_CHANGED,
     SIGNAL_ACTIVE_SIM_COUNT_CHANGED,
@@ -94,6 +100,8 @@ enum ofonoext_mm_signal {
 #define SIGNAL_PRESENT_SIMS_CHANGED_NAME        "present-sims-changed"
 #define SIGNAL_SIM_COUNT_CHANGED_NAME           "sim-count-changed"
 #define SIGNAL_ACTIVE_SIM_COUNT_CHANGED_NAME    "active-sim-count-changed"
+#define SIGNAL_MMS_IMSI_CHANGED_NAME            "mms-imsi-changed"
+#define SIGNAL_MMS_MODEM_CHANGED_NAME           "mms-modem-changed"
 
 static guint ofonoext_mm_signals[SIGNAL_COUNT] = { 0 };
 
@@ -105,6 +113,13 @@ static guint ofonoext_mm_signals[SIGNAL_COUNT] = { 0 };
 
 /* Weak reference to the single instance of OfonoExtModemManager */
 static OfonoExtModemManager* ofonoext_mm_instance = NULL;
+
+/* Async call context */
+typedef struct ofonoext_mm_set_mms_sim_call {
+    OfonoExtCall common;
+    OfonoExtModemManagerSetMmsSimHandler fn;
+    void* arg;
+} OfonoExtModemManagerSetMmsSimCall;
 
 /*==========================================================================*
  * Implementation
@@ -119,6 +134,32 @@ ofonoext_mm_destroyed(
     GASSERT(object == (GObject*)ofonoext_mm_instance);
     ofonoext_mm_instance = NULL;
     GVERBOSE_("%p", object);
+}
+
+static
+void
+ofonoext_mm_set_mms_sim_done(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer data)
+{
+    OfonoExtModemManagerSetMmsSimCall* call = data;
+    char* path = NULL;
+    GError* error = NULL;
+    if (!org_nemomobile_ofono_modem_manager_call_set_mms_sim_finish(
+        ORG_NEMOMOBILE_OFONO_MODEM_MANAGER(proxy), &path, result, &error)) {
+        GERR("%s", GERRMSG(error));
+    }
+    if (call->fn && !g_cancellable_is_cancelled(call->common.cancel)) {
+        OfonoExtModemManager* mm = OFONOEXT_MODEM_MANAGER(call->common.owner);
+        call->fn(mm, path, error, call->arg);
+    }
+    if (error) {
+        g_error_free(error);
+    }
+    ofonoext_call_destroy(&call->common);
+    g_free(call);
+    g_free(path);
 }
 
 static
@@ -167,6 +208,10 @@ ofonoext_mm_reset(
         g_free(priv->voice_imsi);
         self->voice_imsi = priv->voice_imsi = NULL;
     }
+    if (self->mms_imsi) {
+        g_free(priv->mms_imsi);
+        self->mms_imsi = priv->mms_imsi = NULL;
+    }
     if (self->data_modem) {
         ofono_modem_unref(self->data_modem);
         self->data_modem = NULL;
@@ -174,6 +219,10 @@ ofonoext_mm_reset(
     if (self->voice_modem) {
         ofono_modem_unref(self->voice_modem);
         self->voice_modem = NULL;
+    }
+    if (self->mms_modem) {
+        ofono_modem_unref(self->mms_modem);
+        self->mms_modem = NULL;
     }
     if (self->imei) {
         g_strfreev(priv->imei);
@@ -221,38 +270,52 @@ ofonoext_mm_init_done(
     OfonoExtModemManager* self,
     GStrV* available,
     GStrV* enabled,
-    gchar* data_imsi,
-    gchar* voice_imsi,
-    const char* data_modem,
-    const char* voice_modem,
+    char* data_imsi,
+    char* voice_imsi,
+    const char* data_path,
+    const char* voice_path,
     GVariant* present_sims,
-    GStrV* imei)
+    GStrV* imei,
+    char* mms_imsi,
+    const char* mms_path)
 {
     OfonoExtModemManagerPriv* priv = self->priv;
-    OfonoModem* modem;
+    OfonoModem* voice_modem;
+    OfonoModem* data_modem;
+    OfonoModem* mms_modem;
 
     g_strfreev(priv->available);
     g_strfreev(priv->enabled);
     g_strfreev(priv->imei);
     g_free(priv->data_imsi);
     g_free(priv->voice_imsi);
+    g_free(priv->mms_imsi);
 
     self->available = priv->available = available;
     self->enabled = priv->enabled = enabled;
     self->imei = priv->imei = imei;
     self->data_imsi = priv->data_imsi = data_imsi;
     self->voice_imsi = priv->voice_imsi = voice_imsi;
+    self->mms_imsi = priv->mms_imsi = mms_imsi;
     self->modem_count = gutil_strv_length(available);
 
-    modem = self->data_modem;
-    self->data_modem = (data_modem && data_modem[0]) ?
-        ofono_modem_new(data_modem) : NULL;
-    ofono_modem_unref(modem);
+    /* The modem could be the same, so unref the current one after selecting
+     * the new one, to avoid unnecessary deallocations */
+    voice_modem = self->voice_modem;
+    self->voice_modem = (voice_path && voice_path[0]) ?
+        ofono_modem_new(voice_path) : NULL;
 
-    modem = self->voice_modem;
-    self->voice_modem = (voice_modem && voice_modem[0]) ?
-        ofono_modem_new(voice_modem) : NULL;
-    ofono_modem_unref(modem);
+    data_modem = self->data_modem;
+    self->data_modem = (data_path && data_path[0]) ?
+        ofono_modem_new(data_path) : NULL;
+
+    mms_modem = self->mms_modem;
+    self->mms_modem = (mms_path && mms_path[0]) ?
+        ofono_modem_new(mms_path) : NULL;
+
+    ofono_modem_unref(voice_modem);
+    ofono_modem_unref(data_modem);
+    ofono_modem_unref(mms_modem);
 
     if (present_sims) {
         guint i;
@@ -288,6 +351,8 @@ ofonoext_mm_get_all_finish(
         gchar** voice_modem,
         GVariant** present_sims,
         gchar*** imei,
+        gchar** mms_imsi,
+        gchar** mms_modem,
         GAsyncResult* res,
         GError **error))
 {
@@ -299,8 +364,10 @@ ofonoext_mm_get_all_finish(
     char** enabled = NULL;
     char* data_imsi = NULL;
     char* voice_imsi = NULL;
-    char* data_modem = NULL;
-    char* voice_modem = NULL;
+    char* mms_imsi = NULL;
+    char* data_path = NULL;
+    char* voice_path = NULL;
+    char* mms_path = NULL;
     GVariant* present_sims = NULL;
     char** imei = NULL;
 
@@ -309,14 +376,15 @@ ofonoext_mm_get_all_finish(
     g_object_unref(priv->cancel);
     priv->cancel = NULL;
     if (finish_call(ORG_NEMOMOBILE_OFONO_MODEM_MANAGER(proxy), &version,
-        &available, &enabled, &data_imsi, &voice_imsi, &data_modem,
-        &voice_modem, &present_sims, &imei, result, &error)) {
+        &available, &enabled, &data_imsi, &voice_imsi, &data_path,
+        &voice_path, &present_sims, &imei, &mms_imsi, &mms_path,
+        result, &error)) {
         /* This call is only made for interface versions 2 and later */
         GASSERT(version > 1);
         /* ofonoext_mm_init_done takes ownership of all the pointers except
-         * data_modem, voice_modem and present_sims */
+         * data_path, voice_path, mms_path and present_sims */
         ofonoext_mm_init_done(self, available, enabled, data_imsi, voice_imsi,
-            data_modem, voice_modem, present_sims, imei);
+            data_path, voice_path, present_sims, imei, mms_imsi, mms_path);
     } else {
         g_strfreev(available);
         g_strfreev(enabled);
@@ -331,8 +399,9 @@ ofonoext_mm_get_all_finish(
         }
 #endif
     }
-    g_free(data_modem);
-    g_free(voice_modem);
+    g_free(data_path);
+    g_free(voice_path);
+    g_free(mms_path);
     ofonoext_mm_unref(self);
     if (present_sims) g_variant_unref(present_sims);
     if (error) g_error_free(error);
@@ -340,13 +409,48 @@ ofonoext_mm_get_all_finish(
 
 static
 void
-ofonoext_mm_get_all3_done(
+ofonoext_mm_get_all4_done(
     GObject* proxy,
     GAsyncResult* result,
     gpointer data)
 {
     ofonoext_mm_get_all_finish(proxy, result, data,
-        org_nemomobile_ofono_modem_manager_call_get_all3_finish);
+        org_nemomobile_ofono_modem_manager_call_get_all4_finish);
+}
+
+static
+gboolean
+ofonoext_mm_get_all3_finish(
+    OrgNemomobileOfonoModemManager* proxy,
+    gint* version,
+    gchar*** available,
+    gchar*** enabled,
+    gchar** data_imsi,
+    gchar** voice_imsi,
+    gchar** data_path,
+    gchar** voice_path,
+    GVariant** present_sims,
+    gchar*** imei,
+    gchar** mms_imsi,
+    gchar** mms_path,
+    GAsyncResult* res,
+    GError **error)
+{
+    *mms_imsi = NULL;
+    *mms_path = NULL;
+    return org_nemomobile_ofono_modem_manager_call_get_all3_finish(proxy,
+        version, available, enabled, data_imsi, voice_imsi, data_path,
+        voice_path, present_sims, imei, res, error);
+}
+
+static
+void
+ofonoext_mm_get_all3_done(
+    GObject* proxy,
+    GAsyncResult* res,
+    gpointer data)
+{
+    ofonoext_mm_get_all_finish(proxy, res, data, ofonoext_mm_get_all3_finish);
 }
 
 static
@@ -358,17 +462,21 @@ ofonoext_mm_get_all2_finish(
     gchar*** enabled,
     gchar** data_imsi,
     gchar** voice_imsi,
-    gchar** data_modem,
-    gchar** voice_modem,
+    gchar** data_path,
+    gchar** voice_path,
     GVariant** present_sims,
     gchar*** imei,
+    gchar** mms_imsi,
+    gchar** mms_path,
     GAsyncResult* res,
     GError **error)
 {
     *imei = NULL;
+    *mms_imsi = NULL;
+    *mms_path = NULL;
     return org_nemomobile_ofono_modem_manager_call_get_all2_finish(proxy,
-        version, available, enabled, data_imsi, voice_imsi, data_modem,
-        voice_modem, present_sims, res, error);
+        version, available, enabled, data_imsi, voice_imsi, data_path,
+        voice_path, present_sims, res, error);
 }
 
 static
@@ -396,8 +504,8 @@ ofonoext_mm_get_all_done(
     char** enabled = NULL;
     char* data_imsi = NULL;
     char* voice_imsi = NULL;
-    char* data_modem = NULL;
-    char* voice_modem = NULL;
+    char* data_path = NULL;
+    char* voice_path = NULL;
 
     GASSERT(!self->valid);
     GASSERT(priv->cancel);
@@ -405,13 +513,13 @@ ofonoext_mm_get_all_done(
     priv->cancel = NULL;
     if (org_nemomobile_ofono_modem_manager_call_get_all_finish(
         ORG_NEMOMOBILE_OFONO_MODEM_MANAGER(proxy), &version, &available,
-        &enabled, &data_imsi, &voice_imsi, &data_modem, &voice_modem,
+        &enabled, &data_imsi, &voice_imsi, &data_path, &voice_path,
         result, &error)) {
         if (version == 1) {
             /* ofonoext_mm_init_done takes the ownership of the arguments
-             * except for data_modem and voice_modem */
+             * except for data_path and voice_path */
             ofonoext_mm_init_done(self, available, enabled, data_imsi,
-                voice_imsi, data_modem, voice_modem, NULL, NULL);
+                voice_imsi, data_path, voice_path, NULL, NULL, NULL, NULL);
         } else {
             g_strfreev(available);
             g_strfreev(enabled);
@@ -428,10 +536,15 @@ ofonoext_mm_get_all_done(
                     priv->cancel, ofonoext_mm_get_all2_done, self);
                 break;
             case 3:
-            default:
                 /* Request version 3 settings */
                 org_nemomobile_ofono_modem_manager_call_get_all3(priv->proxy,
                     priv->cancel, ofonoext_mm_get_all3_done, self);
+                break;
+            case 4:
+            default:
+                /* Request version 4 settings */
+                org_nemomobile_ofono_modem_manager_call_get_all4(priv->proxy,
+                    priv->cancel, ofonoext_mm_get_all4_done, self);
                 break;
             }
         }
@@ -448,8 +561,8 @@ ofonoext_mm_get_all_done(
         }
 #endif
     }
-    g_free(data_modem);
-    g_free(voice_modem);
+    g_free(data_path);
+    g_free(voice_path);
     ofonoext_mm_unref(self);
     if (error) g_error_free(error);
 }
@@ -548,6 +661,33 @@ ofonoext_mm_present_sims_changed(
 
 static
 void
+ofonoext_mm_default_mms_sim_changed(
+    OrgNemomobileOfonoModemManager* proxy,
+    const char* imsi,
+    gpointer data)
+{
+    OfonoExtModemManager* self = data;
+    OfonoExtModemManagerPriv* priv = self->priv;
+    g_free(priv->mms_imsi);
+    self->mms_imsi = priv->mms_imsi = g_strdup(imsi);
+    g_signal_emit(self, ofonoext_mm_signals[SIGNAL_MMS_IMSI_CHANGED], 0);
+}
+
+static
+void
+ofonoext_mm_default_mms_modem_changed(
+    OrgNemomobileOfonoModemManager* proxy,
+    const char* path,
+    gpointer data)
+{
+    OfonoExtModemManager* self = data;
+    ofono_modem_unref(self->mms_modem);
+    self->mms_modem = (path && path[0]) ? ofono_modem_new(path) : NULL;
+    g_signal_emit(self, ofonoext_mm_signals[SIGNAL_MMS_MODEM_CHANGED], 0);
+}
+
+static
+void
 ofonoext_mm_proxy_created(
     GObject* proxy,
     GAsyncResult* result,
@@ -587,6 +727,12 @@ ofonoext_mm_proxy_created(
         priv->proxy_signal_id[PROXY_SIGNAL_PRESENT_SIMS_CHANGED] =
             g_signal_connect(proxy, "present-sims-changed",
             G_CALLBACK(ofonoext_mm_present_sims_changed), self);
+        priv->proxy_signal_id[PROXY_SIGNAL_MMS_IMSI_CHANGED] =
+            g_signal_connect(proxy, "mms-sim-changed",
+            G_CALLBACK(ofonoext_mm_default_mms_sim_changed), self);
+        priv->proxy_signal_id[PROXY_SIGNAL_MMS_MODEM_CHANGED] =
+            g_signal_connect(proxy, "mms-modem-changed",
+            G_CALLBACK(ofonoext_mm_default_mms_modem_changed), self);
 
         /* Request current settings */
         org_nemomobile_ofono_modem_manager_call_get_all(priv->proxy,
@@ -701,6 +847,36 @@ ofonoext_mm_unref(
     }
 }
 
+void
+ofonoext_mm_set_mms_imsi(
+    OfonoExtModemManager* self,
+    const char* imsi)
+{
+    ofonoext_mm_set_mms_imsi_full(self, imsi, NULL, NULL);
+}
+
+OfonoExtCall*
+ofonoext_mm_set_mms_imsi_full(
+    OfonoExtModemManager* self,
+    const char* imsi,
+    OfonoExtModemManagerSetMmsSimHandler fn,
+    void* arg)
+{
+    if (G_LIKELY(self)) {
+        OfonoExtModemManagerPriv* priv = self->priv;
+        OfonoExtModemManagerSetMmsSimCall* call =
+            g_new0(OfonoExtModemManagerSetMmsSimCall,1);
+        ofonoext_call_init(&call->common, G_OBJECT(self));
+        call->fn = fn;
+        call->arg = arg;
+        org_nemomobile_ofono_modem_manager_call_set_mms_sim(priv->proxy,
+            imsi, call->common.cancel, ofonoext_mm_set_mms_sim_done,
+            call);
+        return &call->common;
+    }
+    return NULL;
+}
+
 gboolean
 ofonoext_mm_modem_enabled_at(
     OfonoExtModemManager* self,
@@ -806,6 +982,26 @@ ofonoext_mm_add_active_sim_count_changed_handler(
         SIGNAL_ACTIVE_SIM_COUNT_CHANGED_NAME, G_CALLBACK(fn), data) : 0;
 }
 
+gulong
+ofonoext_mm_add_mms_imsi_changed_handler(
+    OfonoExtModemManager* self,
+    OfonoExtModemManagerHandler fn,
+    void* data)
+{
+    return (G_LIKELY(self) && G_LIKELY(fn)) ? g_signal_connect(self,
+        SIGNAL_MMS_IMSI_CHANGED_NAME, G_CALLBACK(fn), data) : 0;
+}
+
+gulong
+ofonoext_mm_add_mms_modem_changed_handler(
+    OfonoExtModemManager* self,
+    OfonoExtModemManagerHandler fn,
+    void* data)
+{
+    return (G_LIKELY(self) && G_LIKELY(fn)) ? g_signal_connect(self,
+        SIGNAL_MMS_MODEM_CHANGED_NAME, G_CALLBACK(fn), data) : 0;
+}
+
 void
 ofonoext_mm_remove_handler(
     OfonoExtModemManager* self,
@@ -890,6 +1086,7 @@ ofonoext_mm_finalize(
     g_strfreev(priv->enabled);
     g_free(priv->data_imsi);
     g_free(priv->voice_imsi);
+    g_free(priv->mms_imsi);
     g_free(priv->present_sims);
     g_strfreev(priv->imei);
     G_OBJECT_CLASS(ofonoext_mm_parent_class)->finalize(object);
@@ -916,6 +1113,8 @@ ofonoext_mm_class_init(
     OFONOEXT_SIGNAL_NEW(PRESENT_SIMS);
     OFONOEXT_SIGNAL_NEW(SIM_COUNT);
     OFONOEXT_SIGNAL_NEW(ACTIVE_SIM_COUNT);
+    OFONOEXT_SIGNAL_NEW(MMS_IMSI);
+    OFONOEXT_SIGNAL_NEW(MMS_MODEM);
 }
 
 /*

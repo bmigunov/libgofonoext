@@ -53,7 +53,9 @@ struct ofonoext_modem_manager {
     guint modem_count;
     guint sim_count;
     guint active_sim_count;
-    const GStrV* imei;
+    const GStrV* imei;              /* Since 1.0.3 */
+    const char* mms_imsi;           /* Since 1.0.4 */
+    OfonoModem* mms_modem;
 };
 
 GType ofonoext_mm_get_type(void);
@@ -64,7 +66,15 @@ GType ofonoext_mm_get_type(void);
 typedef
 void
 (*OfonoExtModemManagerHandler)(
-    OfonoExtModemManager* sender,
+    OfonoExtModemManager* mm,
+    void* data);
+
+typedef
+void
+(*OfonoExtModemManagerSetMmsSimHandler)(
+    OfonoExtModemManager* mm,
+    const char* path,
+    const GError* error,
     void* data);
 
 OfonoExtModemManager*
@@ -82,6 +92,18 @@ gboolean
 ofonoext_mm_modem_enabled_at(
     OfonoExtModemManager* mm,
     gint index);
+
+void
+ofonoext_mm_set_mms_imsi(
+    OfonoExtModemManager* mm,
+    const char* imsi);
+
+OfonoExtCall*
+ofonoext_mm_set_mms_imsi_full(
+    OfonoExtModemManager* mm,
+    const char* imsi,
+    OfonoExtModemManagerSetMmsSimHandler fn,
+    void* arg);
 
 gulong
 ofonoext_mm_add_valid_changed_handler(
@@ -133,6 +155,18 @@ ofonoext_mm_add_sim_count_changed_handler(
 
 gulong
 ofonoext_mm_add_active_sim_count_changed_handler(
+    OfonoExtModemManager* mm,
+    OfonoExtModemManagerHandler fn,
+    void* data);
+
+gulong
+ofonoext_mm_add_mms_imsi_changed_handler(
+    OfonoExtModemManager* mm,
+    OfonoExtModemManagerHandler fn,
+    void* data);
+
+gulong
+ofonoext_mm_add_mms_modem_changed_handler(
     OfonoExtModemManager* mm,
     OfonoExtModemManagerHandler fn,
     void* data);
