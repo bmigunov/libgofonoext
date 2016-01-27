@@ -1,3 +1,10 @@
+libgofonoext (1.0.4) unstable; urgency=low
+
+  * Added support for MMS SIM selection
+  * Added -m (--monitor) option to gofonoext-test
+
+ -- Slava Monich <slava.monich@jolla.com>  Wed, 27 Jan 2016 20:23:31 +0200
+
 libgofonoext (1.0.3) unstable; urgency=low
 
   * Added support for getting IMEIs of the modems
