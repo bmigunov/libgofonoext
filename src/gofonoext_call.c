@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2016 Jolla Ltd.
+ * Copyright (C) 2016 Jolla Ltd.
  * Contact: Slava Monich <slava.monich@jolla.com>
  *
  * You may use this file under the terms of BSD license as follows:
@@ -30,25 +30,33 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef GOFONOEXT_TYPES_H
-#define GOFONOEXT_TYPES_H
+#include "gofonoext_call_p.h"
 
-#include <gutil_types.h>
-#include <gofono_types.h>
+void
+ofonoext_call_init(
+    OfonoExtCall* call,
+    GObject* owner)
+{
+    call->owner = g_object_ref(owner);
+    call->cancel = g_cancellable_new();
+}
 
-#define OFONOEXT_LOG_MODULE gofonoext_log
+void
+ofonoext_call_cancel(
+    OfonoExtCall* call)
+{
+    if (G_LIKELY(call)) {
+        g_cancellable_cancel(call->cancel);
+    }
+}
 
-G_BEGIN_DECLS
-
-typedef struct ofonoext_modem_manager OfonoExtModemManager;
-typedef struct ofonoext_sim_settings  OfonoExtSimSettings;
-typedef struct ofonoext_call          OfonoExtCall;
-
-extern GLogModule OFONOEXT_LOG_MODULE;
-
-G_END_DECLS
-
-#endif /* GOFONOEXT_TYPES_H */
+void
+ofonoext_call_destroy(
+    OfonoExtCall* call)
+{
+     g_object_unref(call->cancel);
+     g_object_unref(call->owner);
+}
 
 /*
  * Local Variables:
