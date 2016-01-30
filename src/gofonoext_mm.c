@@ -863,16 +863,18 @@ ofonoext_mm_set_mms_imsi_full(
     void* arg)
 {
     if (G_LIKELY(self)) {
-        OfonoExtModemManagerPriv* priv = self->priv;
-        OfonoExtModemManagerSetMmsSimCall* call =
-            g_new0(OfonoExtModemManagerSetMmsSimCall,1);
-        ofonoext_call_init(&call->common, G_OBJECT(self));
-        call->fn = fn;
-        call->arg = arg;
-        org_nemomobile_ofono_modem_manager_call_set_mms_sim(priv->proxy,
-            imsi, call->common.cancel, ofonoext_mm_set_mms_sim_done,
-            call);
-        return &call->common;
+        GASSERT(self->valid);
+        if (G_LIKELY(self->valid)) {
+            OfonoExtModemManagerPriv* priv = self->priv;
+            OfonoExtModemManagerSetMmsSimCall* call =
+                g_new0(OfonoExtModemManagerSetMmsSimCall,1);
+            ofonoext_call_init(&call->common, G_OBJECT(self));
+            call->fn = fn;
+            call->arg = arg;
+            org_nemomobile_ofono_modem_manager_call_set_mms_sim(priv->proxy,
+                imsi, call->common.cancel, ofonoext_mm_set_mms_sim_done, call);
+            return &call->common;
+        }
     }
     return NULL;
 }
