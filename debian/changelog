@@ -1,3 +1,9 @@
+libgofonoext (1.0.5) unstable; urgency=low
+
+  * Return NULL from ofonoext_mm_set_mms_imsi_full() if mm is invalid
+
+ -- Slava Monich <slava.monich@jolla.com>  Sun, 31 Jan 2016 00:42:37 +0200
+
 libgofonoext (1.0.4) unstable; urgency=low
 
   * Added support for MMS SIM selection
