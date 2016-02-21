@@ -1,3 +1,10 @@
+libgofonoext (1.0.6) unstable; urgency=low
+
+  * Removed support for org.nemomobile.ofono.SimSettings
+  * Use gutil_disconnect_handlers from libglibutil
+
+ -- Slava Monich <slava.monich@jolla.com>  Sun, 21 Feb 2016 12:12:56 +0300
+
 libgofonoext (1.0.5) unstable; urgency=low
 
   * Return NULL from ofonoext_mm_set_mms_imsi_full() if mm is invalid
