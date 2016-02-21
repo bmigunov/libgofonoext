@@ -6,9 +6,10 @@ Group: Development/Libraries
 License: BSD
 URL: https://git.merproject.org/mer-core/libgofonoext
 Source: %{name}-%{version}.tar.bz2
-BuildRequires: glib2-devel >= 2.0
-BuildRequires: libglibutil-devel >= 1.0.3
-BuildRequires: libgofono-devel
+Requires: libglibutil >= 1.0.4
+BuildRequires: pkgconfig(glib-2.0)
+BuildRequires: pkgconfig(libgofono)
+BuildRequires: pkgconfig(libglibutil) >= 1.0.4
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 

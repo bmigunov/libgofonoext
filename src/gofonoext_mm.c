@@ -38,6 +38,7 @@
 #include <gofono_names.h>
 
 #include <gutil_strv.h>
+#include <gutil_misc.h>
 
 /* Generated headers */
 #include "org.nemomobile.ofono.ModemManager.h"
@@ -1020,15 +1021,7 @@ ofonoext_mm_remove_handlers(
     gulong* ids,
     unsigned int count)
 {
-    if (G_LIKELY(self)) {
-        unsigned int i;
-        for (i=0; i<count; i++) {
-            if (G_LIKELY(ids[i])) {
-                g_signal_handler_disconnect(self, ids[i]);
-                ids[i] = 0;
-            }
-        }
-    }
+    gutil_disconnect_handlers(self, ids, count);
 }
 
 /*==========================================================================*
