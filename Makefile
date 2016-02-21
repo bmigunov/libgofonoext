@@ -25,8 +25,7 @@ SRC = \
   gofonoext_mm.c \
   gofonoext_version.c
 GEN_SRC = \
-  org.nemomobile.ofono.ModemManager.c \
-  org.nemomobile.ofono.SimSettings.c
+  org.nemomobile.ofono.ModemManager.c
 
 #
 # Directories
