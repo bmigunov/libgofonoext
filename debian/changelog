@@ -1,3 +1,9 @@
+libgofonoext (1.0.7) unstable; urgency=low
+
+  * Added support for ModemManager API v5
+
+ -- Slava Monich <slava.monich@jolla.com>  Tue, 01 Mar 2016 14:56:29 +0200
+
 libgofonoext (1.0.6) unstable; urgency=low
 
   * Removed support for org.nemomobile.ofono.SimSettings
