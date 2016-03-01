@@ -56,6 +56,7 @@ struct ofonoext_modem_manager {
     const GStrV* imei;              /* Since 1.0.3 */
     const char* mms_imsi;           /* Since 1.0.4 */
     OfonoModem* mms_modem;
+    gboolean ready;                 /* Since 1.0.7 */
 };
 
 GType ofonoext_mm_get_type(void);
@@ -167,6 +168,12 @@ ofonoext_mm_add_mms_imsi_changed_handler(
 
 gulong
 ofonoext_mm_add_mms_modem_changed_handler(
+    OfonoExtModemManager* mm,
+    OfonoExtModemManagerHandler fn,
+    void* data);
+
+gulong
+ofonoext_mm_add_ready_changed_handler(
     OfonoExtModemManager* mm,
     OfonoExtModemManagerHandler fn,
     void* data);

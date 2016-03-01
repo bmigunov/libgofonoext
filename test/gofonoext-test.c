@@ -45,7 +45,7 @@
 typedef struct action Action;
 
 enum event_id {
-    EVENT_VALID,
+    EVENT_VALID, /* Must be first */
     EVENT_ENABLED_MODEMS,
     EVENT_PRESENT_SIMS,
     EVENT_VOICE_IMSI,
@@ -56,6 +56,7 @@ enum event_id {
     EVENT_MMS_MODEM,
     EVENT_SIM_COUNT,
     EVENT_ACTIVE_SIM_COUNT,
+    EVENT_READY,
     EVENT_COUNT
 };
 
@@ -136,57 +137,13 @@ mm_format_strv(
     } else {
         buf = g_string_new(NULL);
     }
+    g_string_append(buf, "[");
     for (ptr = sv; *ptr; ptr++) {
         if (ptr > sv) g_string_append(buf, ", ");
         g_string_append(buf, *ptr);
     }
     g_string_append(buf, "]");
     return buf;
-}
-
-static
-void
-mm_valid(
-    App* app)
-{
-    GString* buf = NULL;
-    GDEBUG("ofono is running");
-    buf = mm_format_strv(buf, app->mm->available);
-    printf("Available modems: %s\n", buf->str);
-    buf = mm_format_strv(buf, app->mm->enabled);
-    printf("Enabled modems: %s\n", buf->str);
-    buf = mm_format_strv(buf, app->mm->imei);
-    printf("IMEI: %s\n", buf->str);
-    buf = mm_format_bools(buf, app->mm->present_sims, app->mm->sim_count);
-    printf("Present SIMs: %s\n", buf->str);
-    printf("Voice SIM: %s\n", app->mm->voice_imsi);
-    printf("Data SIM: %s\n", app->mm->data_imsi);
-    printf("MMS SIM: %s\n", app->mm->mms_imsi);
-    printf("Voice modem: %s\n", ofono_modem_path(app->mm->voice_modem));
-    printf("Data modem: %s\n", ofono_modem_path(app->mm->data_modem));
-    printf("MMS modem: %s\n", ofono_modem_path(app->mm->mms_modem));
-    printf("Modem count: %u\n", app->mm->modem_count);
-    printf("SIM count: %u\n", app->mm->sim_count);
-    printf("Active SIM count: %u\n", app->mm->active_sim_count);
-    g_string_free(buf, TRUE);
-    app_run_actions(app);
-    if (!app->active && !app->monitor) {
-        g_main_loop_quit(app->loop);
-    }
-}
-
-static
-void
-mm_valid_changed(
-    OfonoExtModemManager* mm,
-    void* arg)
-{
-    if (mm->valid) {
-        App* app = arg;
-        ofonoext_mm_remove_handler(mm, app->event_id[EVENT_VALID]);
-        app->event_id[EVENT_VALID] = 0;
-        mm_valid(app);
-    }
 }
 
 static
@@ -287,6 +244,98 @@ mm_active_sim_count_changed(
 
 static
 void
+mm_ready_changed(
+    OfonoExtModemManager* mm,
+    void* arg)
+{
+    GDEBUG("Ready: %s", mm->ready ? "yes" : "no");
+}
+
+static
+void
+mm_valid(
+    App* app)
+{
+    GString* buf = NULL;
+    GDEBUG("ofono is running");
+    buf = mm_format_strv(buf, app->mm->available);
+    printf("Ready: %s\n", app->mm->ready ? "yes" : "no");
+    printf("Available modems: %s\n", buf->str);
+    buf = mm_format_strv(buf, app->mm->enabled);
+    printf("Enabled modems: %s\n", buf->str);
+    buf = mm_format_strv(buf, app->mm->imei);
+    printf("IMEI: %s\n", buf->str);
+    buf = mm_format_bools(buf, app->mm->present_sims, app->mm->sim_count);
+    printf("Present SIMs: %s\n", buf->str);
+    printf("Voice SIM: %s\n", app->mm->voice_imsi);
+    printf("Data SIM: %s\n", app->mm->data_imsi);
+    printf("MMS SIM: %s\n", app->mm->mms_imsi);
+    printf("Voice modem: %s\n", ofono_modem_path(app->mm->voice_modem));
+    printf("Data modem: %s\n", ofono_modem_path(app->mm->data_modem));
+    printf("MMS modem: %s\n", ofono_modem_path(app->mm->mms_modem));
+    printf("Modem count: %u\n", app->mm->modem_count);
+    printf("SIM count: %u\n", app->mm->sim_count);
+    printf("Active SIM count: %u\n", app->mm->active_sim_count);
+    g_string_free(buf, TRUE);
+    app_run_actions(app);
+    if (app->monitor) {
+        ofonoext_mm_remove_handlers(app->mm, app->event_id+1, EVENT_COUNT-1);
+        app->event_id[EVENT_ENABLED_MODEMS] =
+            ofonoext_mm_add_enabled_modems_changed_handler(app->mm,
+                mm_enabled_modems_changed, app);
+        app->event_id[EVENT_PRESENT_SIMS] =
+            ofonoext_mm_add_present_sims_changed_handler(app->mm,
+                mm_present_sims_changed, app);
+        app->event_id[EVENT_VOICE_IMSI] =
+            ofonoext_mm_add_voice_imsi_changed_handler(app->mm,
+                mm_voice_imsi_changed, app);
+        app->event_id[EVENT_VOICE_MODEM] =
+            ofonoext_mm_add_voice_modem_changed_handler(app->mm,
+                mm_voice_modem_changed, app);
+        app->event_id[EVENT_DATA_IMSI] =
+            ofonoext_mm_add_data_imsi_changed_handler(app->mm,
+                mm_data_imsi_changed, app);
+        app->event_id[EVENT_DATA_MODEM] =
+            ofonoext_mm_add_data_modem_changed_handler(app->mm,
+                mm_data_modem_changed, app);
+        app->event_id[EVENT_MMS_IMSI] =
+            ofonoext_mm_add_mms_imsi_changed_handler(app->mm,
+                mm_mms_imsi_changed, app);
+        app->event_id[EVENT_MMS_MODEM] =
+            ofonoext_mm_add_mms_modem_changed_handler(app->mm,
+                mm_mms_modem_changed, app);
+        app->event_id[EVENT_SIM_COUNT] =
+            ofonoext_mm_add_sim_count_changed_handler(app->mm,
+                mm_sim_count_changed, app);
+        app->event_id[EVENT_ACTIVE_SIM_COUNT] =
+            ofonoext_mm_add_active_sim_count_changed_handler(app->mm,
+                mm_active_sim_count_changed, app);
+        app->event_id[EVENT_READY] =
+            ofonoext_mm_add_ready_changed_handler(app->mm,
+                mm_ready_changed, app);
+    } else if (!app->active) {
+        g_main_loop_quit(app->loop);
+    }
+}
+
+static
+void
+mm_valid_changed(
+    OfonoExtModemManager* mm,
+    void* arg)
+{
+    App* app = arg;
+    if (mm->valid) {
+        mm_valid(app);
+    } else {
+        /* Detach all handlers except EVENT_VALID which is the first one */
+        ofonoext_mm_remove_handlers(app->mm, app->event_id+1, EVENT_COUNT-1);
+        GDEBUG("ofono has disappeared");
+    }
+}
+
+static
+void
 app_action_done(
     App* app)
 {
@@ -356,36 +405,6 @@ app_run(
         app->event_id[EVENT_VALID] =
             ofonoext_mm_add_valid_changed_handler(app->mm,
                 mm_valid_changed, app);
-        app->event_id[EVENT_ENABLED_MODEMS] =
-            ofonoext_mm_add_enabled_modems_changed_handler(app->mm,
-                mm_enabled_modems_changed, app);
-        app->event_id[EVENT_PRESENT_SIMS] =
-            ofonoext_mm_add_present_sims_changed_handler(app->mm,
-                mm_present_sims_changed, app);
-        app->event_id[EVENT_VOICE_IMSI] =
-            ofonoext_mm_add_voice_imsi_changed_handler(app->mm,
-                mm_voice_imsi_changed, app);
-        app->event_id[EVENT_VOICE_MODEM] =
-            ofonoext_mm_add_voice_modem_changed_handler(app->mm,
-                mm_voice_modem_changed, app);
-        app->event_id[EVENT_DATA_IMSI] =
-            ofonoext_mm_add_data_imsi_changed_handler(app->mm,
-                mm_data_imsi_changed, app);
-        app->event_id[EVENT_DATA_MODEM] =
-            ofonoext_mm_add_data_modem_changed_handler(app->mm,
-                mm_data_modem_changed, app);
-        app->event_id[EVENT_MMS_IMSI] =
-            ofonoext_mm_add_mms_imsi_changed_handler(app->mm,
-                mm_mms_imsi_changed, app);
-        app->event_id[EVENT_MMS_MODEM] =
-            ofonoext_mm_add_mms_modem_changed_handler(app->mm,
-                mm_mms_modem_changed, app);
-        app->event_id[EVENT_SIM_COUNT] =
-            ofonoext_mm_add_sim_count_changed_handler(app->mm,
-                mm_sim_count_changed, app);
-        app->event_id[EVENT_ACTIVE_SIM_COUNT] =
-            ofonoext_mm_add_active_sim_count_changed_handler(app->mm,
-                mm_active_sim_count_changed, app);
         g_main_loop_run(app->loop);
         ofonoext_mm_remove_handlers(app->mm, app->event_id, EVENT_COUNT);
     }
