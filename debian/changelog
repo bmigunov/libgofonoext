@@ -1,3 +1,9 @@
+libgofonoext (1.0.8) unstable; urgency=low
+
+  * Retry GetAll calls after timeout
+
+ -- Slava Monich <slava.monich@jolla.com>  Sun, 06 Mar 2016 21:02:24 +0200
+
 libgofonoext (1.0.7) unstable; urgency=low
 
   * Added support for ModemManager API v5
