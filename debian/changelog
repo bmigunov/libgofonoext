@@ -1,3 +1,9 @@
+libgofonoext (1.0.9) unstable; urgency=low
+
+  * Do not query D-Bus properties from ofono
+
+ -- Slava Monich <slava.monich@jolla.com>  Mon, 24 Apr 2017 18:28:28 +0300
+
 libgofonoext (1.0.8) unstable; urgency=low
 
   * Retry GetAll calls after timeout

@@ -1,5 +1,5 @@
 Name: libgofonoext
-Version: 1.0.8
+Version: 1.0.9
 Release: 0
 Summary: Client library for nemomobile ofono extensions
 Group: Development/Libraries
