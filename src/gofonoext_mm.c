@@ -963,33 +963,38 @@ ofonoext_mm_name_vanished(
     ofonoext_mm_set_valid(self, FALSE);
 }
 
-/*==========================================================================*
- * API
- *==========================================================================*/
-
 static
-OfonoExtModemManager*
-ofonoext_mm_create()
+void
+ofonoext_mm_bus(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer data)
 {
     GError* error = NULL;
-    GDBusConnection* bus = g_bus_get_sync(OFONO_BUS_TYPE, NULL, &error);
-    if (bus) {
-        OfonoExtModemManager* self =
-            g_object_new(OFONOEXT_TYPE_MODEM_MANAGER, NULL);
-        OfonoExtModemManagerPriv* priv = self->priv;
-        priv->bus = bus;
-        priv->ofono_watch_id = g_bus_watch_name_on_connection(bus,
+    OfonoExtModemManager* self = OFONOEXT_MODEM_MANAGER(data);
+    OfonoExtModemManagerPriv* priv = self->priv;
+
+    GASSERT(!priv->cancel);
+    GASSERT(!self->valid);
+    GASSERT(!priv->proxy);
+    priv->bus = g_bus_get_finish(result, &error);
+    if (priv->bus) {
+        GDEBUG("Bus connected");
+        priv->ofono_watch_id = g_bus_watch_name_on_connection(priv->bus,
             OFONO_SERVICE, G_BUS_NAME_WATCHER_FLAGS_NONE,
             ofonoext_mm_name_appeared,
             ofonoext_mm_name_vanished,
             self, NULL);
-        return self;
     } else {
         GERR("%s", GERRMSG(error));
         g_error_free(error);
     }
-    return NULL;
+    ofonoext_mm_unref(self);
 }
+
+/*==========================================================================*
+ * API
+ *==========================================================================*/
 
 OfonoExtModemManager*
 ofonoext_mm_new()
@@ -998,9 +1003,10 @@ ofonoext_mm_new()
     if (ofonoext_mm_instance) {
         g_object_ref(mm = ofonoext_mm_instance);
     } else {
-        mm = ofonoext_mm_create();
+        mm = g_object_new(OFONOEXT_TYPE_MODEM_MANAGER, NULL);
         ofonoext_mm_instance = mm;
         g_object_weak_ref(G_OBJECT(mm), ofonoext_mm_destroyed, mm);
+        g_bus_get(OFONO_BUS_TYPE, NULL, ofonoext_mm_bus, ofonoext_mm_ref(mm));
     }
     return mm;
 }
