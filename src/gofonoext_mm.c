@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2017 Jolla Ltd.
+ * Copyright (C) 2015-2018 Jolla Ltd.
  * Contact: Slava Monich <slava.monich@jolla.com>
  *
  * You may use this file under the terms of BSD license as follows:
@@ -268,6 +268,10 @@ ofonoext_mm_reset(
     if (self->voice_modem) {
         ofono_modem_unref(self->voice_modem);
         self->voice_modem = NULL;
+    }
+    if (self->present_sims) {
+        g_free(priv->present_sims);
+        self->present_sims = priv->present_sims = NULL;
     }
     if (self->mms_modem) {
         ofono_modem_unref(self->mms_modem);
@@ -1226,29 +1230,6 @@ ofonoext_mm_init(
 }
 
 /**
- * First stage of deinitialization (release all references).
- * May be called more than once in the lifetime of the object.
- */
-static
-void
-ofonoext_mm_dispose(
-    GObject* object)
-{
-    OfonoExtModemManager* self = OFONOEXT_MODEM_MANAGER(object);
-    OfonoExtModemManagerPriv* priv = self->priv;
-    ofonoext_mm_reset(self);
-    if (priv->ofono_watch_id) {
-        g_bus_unwatch_name(priv->ofono_watch_id);
-        priv->ofono_watch_id = 0;
-    }
-    if (priv->bus) {
-        g_object_unref(priv->bus);
-        priv->bus = NULL;
-    }
-    G_OBJECT_CLASS(ofonoext_mm_parent_class)->dispose(object);
-}
-
-/**
  * Final stage of deinitialization
  */
 static
@@ -1259,15 +1240,13 @@ ofonoext_mm_finalize(
     OfonoExtModemManager* self = OFONOEXT_MODEM_MANAGER(object);
     OfonoExtModemManagerPriv* priv = self->priv;
     GASSERT(!priv->cancel);
-    GASSERT(!priv->bus);
-    GASSERT(!priv->proxy);
-    g_strfreev(priv->available);
-    g_strfreev(priv->enabled);
-    g_free(priv->data_imsi);
-    g_free(priv->voice_imsi);
-    g_free(priv->mms_imsi);
-    g_free(priv->present_sims);
-    g_strfreev(priv->imei);
+    ofonoext_mm_reset(self);
+    if (priv->ofono_watch_id) {
+        g_bus_unwatch_name(priv->ofono_watch_id);
+    }
+    if (priv->bus) {
+        g_object_unref(priv->bus);
+    }
     G_OBJECT_CLASS(ofonoext_mm_parent_class)->finalize(object);
 }
 
@@ -1279,9 +1258,7 @@ void
 ofonoext_mm_class_init(
     OfonoExtModemManagerClass* klass)
 {
-    GObjectClass* object_class = G_OBJECT_CLASS(klass);
-    object_class->dispose = ofonoext_mm_dispose;
-    object_class->finalize = ofonoext_mm_finalize;
+    G_OBJECT_CLASS(klass)->finalize = ofonoext_mm_finalize;
     g_type_class_add_private(klass, sizeof(OfonoExtModemManagerPriv));
     OFONOEXT_SIGNAL_NEW(VALID);
     OFONOEXT_SIGNAL_NEW(ENABLED_MODEMS);
