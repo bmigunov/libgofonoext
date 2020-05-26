@@ -75,8 +75,8 @@ INCLUDES = -I$(INCLUDE_DIR) -I$(GEN_DIR)
 BASE_FLAGS = -fPIC $(CFLAGS)
 FULL_CFLAGS = $(BASE_FLAGS) $(DEFINES) $(WARNINGS) $(INCLUDES) -MMD -MP \
   $(shell pkg-config --cflags $(PKGS))
-LDFLAGS = $(BASE_FLAGS) -shared -Wl,-soname -Wl,$(LIB_SONAME) \
-  $(shell pkg-config --libs $(PKGS))
+LDFLAGS = $(BASE_FLAGS) -shared -Wl,-soname=$(LIB_SONAME) \
+  -Wl,--version-script=$(LIB_NAME).map $(shell pkg-config --libs $(PKGS))
 DEBUG_FLAGS = -g
 RELEASE_FLAGS =
 
