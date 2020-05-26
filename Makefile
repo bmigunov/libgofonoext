@@ -80,10 +80,7 @@ LDFLAGS = $(BASE_FLAGS) -shared -Wl,-soname=$(LIB_SONAME) \
 DEBUG_FLAGS = -g
 RELEASE_FLAGS =
 
-ifndef KEEP_SYMBOLS
-KEEP_SYMBOLS = 0
-endif
-
+KEEP_SYMBOLS ?= 0
 ifneq ($(KEEP_SYMBOLS),0)
 RELEASE_FLAGS += -g
 endif
@@ -120,6 +117,7 @@ endif
 endif
 
 $(GEN_FILES): | $(GEN_DIR)
+$(PKGCONFIG): | $(BUILD_DIR)
 $(DEBUG_OBJS): | $(DEBUG_BUILD_DIR)
 $(RELEASE_OBJS): | $(RELEASE_BUILD_DIR)
 
@@ -153,9 +151,10 @@ print_release_link:
 clean:
 	rm -f *~ $(SRC_DIR)/*~ $(INCLUDE_DIR)/*~ rpm/*~
 	rm -fr $(BUILD_DIR) RPMS installroot
-	rm -fr debian/tmp debian/libgofono debian/libgofono-dev
+	rm -fr debian/tmp debian/libgofonoext debian/libgofonoext-dev
 	rm -f documentation.list debian/files debian/*.substvars
 	rm -f debian/*.debhelper.log debian/*.debhelper debian/*~
+	rm -f debian/*.install
 
 $(GEN_DIR):
 	mkdir -p $@
@@ -202,24 +201,31 @@ $(DEBUG_BUILD_DIR)/$(LIB_SYMLINK2): $(DEBUG_LIB)
 $(RELEASE_BUILD_DIR)/$(LIB_SYMLINK2): $(RELEASE_LIB)
 	ln -sf $(LIB) $@
 
-$(PKGCONFIG): $(LIB_NAME).pc.in
-	sed -e 's/\[version\]/'$(PCVERSION)/g $< > $@
+#
+# LIBDIR usually gets substituted with arch specific dir.
+# It's relative in deb build and can be whatever in rpm build.
+#
+
+LIBDIR ?= usr/lib
+ABS_LIBDIR := $(shell echo /$(LIBDIR) | sed -r 's|/+|/|g')
+
+$(PKGCONFIG): $(LIB_NAME).pc.in Makefile
+	sed -e 's|@version@|$(PCVERSION)|g' -e 's|@libdir@|$(ABS_LIBDIR)|g' $< > $@
+
+debian/%.install: debian/%.install.in
+	sed 's|@LIBDIR@|$(LIBDIR)|g' $< > $@
 
 #
 # Install
 #
 
-INSTALL_PERM  = 644
-INSTALL_OWNER = $(shell id -u)
-INSTALL_GROUP = $(shell id -g)
-
 INSTALL = install
 INSTALL_DIRS = $(INSTALL) -d
-INSTALL_FILES = $(INSTALL) -m $(INSTALL_PERM)
+INSTALL_FILES = $(INSTALL) -m 644
 
-INSTALL_LIB_DIR = $(DESTDIR)/usr/lib
+INSTALL_LIB_DIR = $(DESTDIR)$(ABS_LIBDIR)
 INSTALL_INCLUDE_DIR = $(DESTDIR)/usr/include/$(NAME)
-INSTALL_PKGCONFIG_DIR = $(DESTDIR)/usr/lib/pkgconfig
+INSTALL_PKGCONFIG_DIR = $(DESTDIR)$(ABS_LIBDIR)/pkgconfig
 
 INSTALL_ALIAS = $(INSTALL_LIB_DIR)/$(LIB_SHORTCUT)
 

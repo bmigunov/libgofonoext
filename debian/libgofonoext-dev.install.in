@@ -1,0 +1,3 @@
+debian/tmp/@LIBDIR@/libgofonoext.so @LIBDIR@
+debian/tmp/@LIBDIR@/pkgconfig/libgofonoext.pc @LIBDIR@/pkgconfig
+debian/tmp/usr/include/* usr/include
