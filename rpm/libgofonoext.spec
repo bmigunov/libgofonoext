@@ -1,20 +1,23 @@
 Name: libgofonoext
 Version: 1.0.10
 Release: 0
-Summary: Client library for nemomobile ofono extensions
+Summary: Client library for Sailfish OS ofono extensions
 Group: Development/Libraries
 License: BSD
-URL: https://git.merproject.org/mer-core/libgofonoext
+URL: https://git.sailfishos.org/mer-core/libgofonoext
 Source: %{name}-%{version}.tar.bz2
-Requires: libglibutil >= 1.0.5
+
+%define libglibutil_version 1.0.5
+
 BuildRequires: pkgconfig(glib-2.0)
 BuildRequires: pkgconfig(libgofono)
-BuildRequires: pkgconfig(libglibutil) >= 1.0.5
+BuildRequires:  pkgconfig(libglibutil) >= %{libglibutil_version}
+Requires:   libglibutil >= %{libglibutil_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 
 %description
-Provides glib-based API for nemomobile ofono extensions
+Provides glib-based API for Sailfish OS ofono extensions
 
 %package devel
 Summary: Development library for %{name}
@@ -28,11 +31,11 @@ This package contains the development library for %{name}.
 %setup -q
 
 %build
-make KEEP_SYMBOLS=1 release pkgconfig
+make LIBDIR=%{_libdir} KEEP_SYMBOLS=1 release pkgconfig
 
 %install
 rm -rf %{buildroot}
-make install-dev DESTDIR=%{buildroot}
+make LIBDIR=%{_libdir} DESTDIR=%{buildroot} install-dev
 
 %post -p /sbin/ldconfig
 
