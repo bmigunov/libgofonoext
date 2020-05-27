@@ -1,3 +1,13 @@
+libgofonoext (1.0.11) unstable; urgency=low
+
+  * Hide internal symbols
+  * Respect arch specific lib dir
+  * Added ofonoext_mm_remove_all_handlers macro
+  * Ignore GLib deprecation warnings
+  * Freshened up license
+
+ -- Slava Monich <slava.monich@jolla.com>  Wed, 27 May 2020 13:21:27 +0300
+
 libgofonoext (1.0.10) unstable; urgency=low
 
   * Fixed present_sims leak
