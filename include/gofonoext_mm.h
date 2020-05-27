@@ -189,6 +189,9 @@ ofonoext_mm_remove_handlers(
     gulong* ids,
     unsigned int count);
 
+#define ofonoext_mm_remove_all_handlers(mm, ids) \
+    ofonoext_mm_remove_handlers(mm, ids, G_N_ELEMENTS(ids)) /* Since 1.0.11 */
+
 G_END_DECLS
 
 #endif /* GOFONOEXT_MM_H */
