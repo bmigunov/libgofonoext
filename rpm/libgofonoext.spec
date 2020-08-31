@@ -1,8 +1,7 @@
 Name: libgofonoext
-Version: 1.0.11
+Version: 1.0.12
 Release: 0
 Summary: Client library for Sailfish OS ofono extensions
-Group: Development/Libraries
 License: BSD
 URL: https://git.sailfishos.org/mer-core/libgofonoext
 Source: %{name}-%{version}.tar.bz2

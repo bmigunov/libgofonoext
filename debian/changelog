@@ -1,3 +1,9 @@
+libgofonoext (1.0.12) unstable; urgency=low
+
+  * Make library executable on RPM based systems
+
+ -- Slava Monich <slava.monich@jolla.com>  Mon, 31 Aug 2020 23:39:24 +0300
+
 libgofonoext (1.0.11) unstable; urgency=low
 
   * Hide internal symbols
