@@ -3,7 +3,7 @@ Version: 1.0.12
 Release: 0
 Summary: Client library for Sailfish OS ofono extensions
 License: BSD
-URL: https://git.sailfishos.org/mer-core/libgofonoext
+URL: https://github.com/sailfishos/libgofonoext
 Source: %{name}-%{version}.tar.bz2
 
 %define libglibutil_version 1.0.5
@@ -42,6 +42,7 @@ make LIBDIR=%{_libdir} DESTDIR=%{buildroot} install-dev
 
 %files
 %defattr(-,root,root,-)
+%license LICENSE
 %{_libdir}/%{name}.so.*
 
 %files devel
