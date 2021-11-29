@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2015-2020 Jolla Ltd.
- * Copyright (C) 2015-2020 Slava Monich <slava.monich@jolla.com>
+ * Copyright (C) 2015-2021 Jolla Ltd.
+ * Copyright (C) 2015-2021 Slava Monich <slava.monich@jolla.com>
  *
  * You may use this file under the terms of BSD license as follows:
  *
@@ -762,7 +762,7 @@ ofonoext_mm_get_allx(
     GASSERT(!self->valid);
     GASSERT(!priv->cancel);
     GASSERT(priv->version > 1);
-   
+
     priv->cancel = g_cancellable_new();
     ofonoext_mm_ref(self);
     switch (priv->version) {
@@ -912,7 +912,7 @@ ofonoext_mm_proxy_created(
     priv->cancel = NULL;
     priv->proxy =
         org_nemomobile_ofono_modem_manager_proxy_new_finish(result, &error);
-    
+
     if (priv->proxy) {
         /* Request current settings */
         priv->cancel = g_cancellable_new();
