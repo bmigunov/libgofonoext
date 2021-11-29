@@ -1,3 +1,10 @@
+libgofonoext (1.0.13) unstable; urgency=low
+
+  * Fixed parallel build
+  * Enabled link-time optimizer for release build
+
+ -- Slava Monich <slava.monich@jolla.com>  Mon, 29 Nov 2021 15:05:08 +0200
+
 libgofonoext (1.0.12) unstable; urgency=low
 
   * Make library executable on RPM based systems

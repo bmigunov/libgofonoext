@@ -1,6 +1,6 @@
 Name: libgofonoext
 
-Version: 1.0.12
+Version: 1.0.13
 Release: 0
 Summary: Client library for Sailfish OS ofono extensions
 License: BSD
