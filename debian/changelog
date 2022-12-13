@@ -1,3 +1,9 @@
+libgofonoext (1.0.14) unstable; urgency=low
+
+  * Fixed build issues
+
+ -- Slava Monich <slava@monich.com>  Tue, 13 Dec 2022 16:32:19 +0200
+
 libgofonoext (1.0.13) unstable; urgency=low
 
   * Fixed parallel build

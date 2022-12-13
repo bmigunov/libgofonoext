@@ -1,6 +1,6 @@
 Name: libgofonoext
 
-Version: 1.0.13
+Version: 1.0.14
 Release: 0
 Summary: Client library for Sailfish OS ofono extensions
 License: BSD
@@ -39,7 +39,6 @@ This package contains the development library for %{name}.
 make %{_smp_mflags} LIBDIR=%{_libdir} KEEP_SYMBOLS=1 release pkgconfig
 
 %install
-rm -rf %{buildroot}
 make LIBDIR=%{_libdir} DESTDIR=%{buildroot} install-dev
 
 %post -p /sbin/ldconfig
@@ -55,6 +54,7 @@ make LIBDIR=%{_libdir} DESTDIR=%{buildroot} install-dev
 
 %files devel
 %defattr(-,root,root,-)
-%{_libdir}/pkgconfig/*.pc
+%dir %{_includedir}/gofonoext
+%{_libdir}/pkgconfig/%{name}.pc
 %{_libdir}/%{name}.so
 %{_includedir}/gofonoext/*.h
